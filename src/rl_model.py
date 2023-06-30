@@ -196,17 +196,16 @@ class SLDEnv(gym.Env):
         self.set_model_parameters(pars)
         _, self.refl = self.ref_model.reflectivity()
 
-        if self.allow_mixing:
-            self.set_model_parameters(self.parameters)
+        if self.allow_mixing and not self.start_state:
+            if self.reverse:
+                self.set_model_parameters(self.end_parameters)
+            else:
+                self.set_model_parameters(self.parameters)
             _, _refl = self.ref_model.reflectivity()
             self.refl = (1 - mixing) * self.refl + mixing * _refl
 
         # Compute reward
         idx = self.data[self.time_stamp][2] > 0
-
-        if np.any(np.isnan(self.refl[idx])):
-            self.refl = np.ones(len(self.refl))
-            print("NaNs in reflectivity")
         reward = -np.sum( (self.refl[idx] - self.data[self.time_stamp][1][idx])**2 / self.data[self.time_stamp][2][idx]**2 ) / len(self.data[self.time_stamp][2][idx])
 
         # Store the chi2
@@ -226,10 +225,11 @@ class SLDEnv(gym.Env):
         if self.start_state:
             reward -= len(self.data) * np.sum( (action - self.normalized_parameters)**2 ) / len(self.normalized_parameters)
             if self.allow_mixing:
-                reward -= 10.*mixing
+                reward -= len(self.data)*mixing
         if terminated and self.end_model:
             reward -= len(self.data) * np.sum( (action - self.normalized_end_parameters)**2 ) / len(self.normalized_end_parameters)
-            reward -= 10.*mixing
+            if self.allow_mixing:
+                reward -= len(self.data)*mixing
 
         self.start_state = False
 
