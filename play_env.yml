@@ -1,0 +1,15 @@
+name: playground
+dependencies:
+- numpy
+- nb_conda
+- python=3.9
+- pip:
+  - pandas
+  - plotly
+  - scipy
+  - periodictable
+  - refl1d
+  - matplotlib
+  - lmfit
+  - gymnasium
+  - stable-baselines3[extra]

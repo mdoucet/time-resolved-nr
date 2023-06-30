@@ -49,7 +49,7 @@ def convolve(xi, yi, x, dx, resolution='normal'):
 
 class SLDEnv(gym.Env):
 
-    def __init__(self, initial_state_file, final_state_file=None, data=None, reverse=True):
+    def __init__(self, initial_state_file, final_state_file=None, data=None, reverse=True, allow_mixing=False):
         """
             Initial and final states are in chronological order. The reverse parameter
             will take care of swapping the start and end states.
@@ -64,12 +64,12 @@ class SLDEnv(gym.Env):
         self.data = self.check_data(data)
         self.reverse = reverse
         self.q_resolution = 0.028
+        self.allow_mixing = allow_mixing
 
         if data is None:
             self.q = np.logspace(np.log10(0.009), np.log10(0.2), num=150)
         else:
             self.q = self.data[0][0]
-        print(type(self.q))
 
         # Set up the model
         self.setup_model()
@@ -81,6 +81,8 @@ class SLDEnv(gym.Env):
 
         # Determine action space, normalized between 0 and 1
         action_size = len(self.low_array)
+        if allow_mixing:
+            action_size += 1
         self.action_space = gym.spaces.Box(low=-1, high=1, shape=[action_size], dtype=np.float32)
         # Observation space is the timestamp
         self.observation_space = gym.spaces.Box(low=0., high=1., shape=(1,), dtype=np.float32)
@@ -89,8 +91,6 @@ class SLDEnv(gym.Env):
         data_list = []
         for d in data:
             _d = np.asarray(d)
-            #print(_d.shape)
-            #print(type(_d[0]))
             data_list.append(np.asarray(d))
         return data_list
 
@@ -178,6 +178,9 @@ class SLDEnv(gym.Env):
         self.ref_model.update()
 
     def step(self, action):
+        if self.allow_mixing:
+            mixing = (action[-1] + 1)/2.0
+            action = action[:-1]
         truncated = False
         info = {}
         pars = self.convert_action_to_parameters(action)
@@ -191,8 +194,12 @@ class SLDEnv(gym.Env):
                                     name=self.ref_model.probe.intensity.name)
         self.ref_model.probe = probe
         self.set_model_parameters(pars)
-
         _, self.refl = self.ref_model.reflectivity()
+
+        if self.allow_mixing:
+            self.set_model_parameters(self.parameters)
+            _, _refl = self.ref_model.reflectivity()
+            self.refl = (1 - mixing) * self.refl + mixing * _refl
 
         # Compute reward
         idx = self.data[self.time_stamp][2] > 0
@@ -201,6 +208,9 @@ class SLDEnv(gym.Env):
             self.refl = np.ones(len(self.refl))
             print("NaNs in reflectivity")
         reward = -np.sum( (self.refl[idx] - self.data[self.time_stamp][1][idx])**2 / self.data[self.time_stamp][2][idx]**2 ) / len(self.data[self.time_stamp][2][idx])
+
+        # Store the chi2
+        self.chi2 = -reward
 
         if self.reverse:
             terminated = self.time_stamp <= 0
@@ -215,8 +225,11 @@ class SLDEnv(gym.Env):
         # Add a term for the boundary conditions (first and last times)
         if self.start_state:
             reward -= len(self.data) * np.sum( (action - self.normalized_parameters)**2 ) / len(self.normalized_parameters)
+            if self.allow_mixing:
+                reward -= 10.*mixing
         if terminated and self.end_model:
             reward -= len(self.data) * np.sum( (action - self.normalized_end_parameters)**2 ) / len(self.normalized_end_parameters)
+            reward -= 10.*mixing
 
         self.start_state = False
 
@@ -235,22 +248,23 @@ class SLDEnv(gym.Env):
     def render(self, action=0, reward=0):
         print(action)
 
-    def plot(self, scale=1, newfig=True, errors=False):
+    def plot(self, scale=1, newfig=True, errors=False, label=None):
         if newfig:
             fig = plt.figure(dpi=100)
         plt.plot(self.q, self.refl*scale)
 
-        idx = self.data[self.time_stamp][1] > 0
+        idx = self.data[self.time_stamp][1] > self.data[self.time_stamp][2]
+        _label = label if label is not None else str(self.time_stamp)
         if errors:
             plt.errorbar(self.data[self.time_stamp][0][idx], self.data[self.time_stamp][1][idx]*scale,
-                         yerr=self.data[self.time_stamp][2][idx]*scale, label=str(self.time_stamp))
+                         yerr=self.data[self.time_stamp][2][idx]*scale, label=_label)
         else:
             plt.plot(self.data[self.time_stamp][0][idx], self.data[self.time_stamp][1][idx]*scale,
-                     label=str(self.time_stamp))
+                     label=_label)
 
         plt.gca().legend()
-        plt.xlabel('Q [$1/\AA$]')
-        plt.ylabel('R')
+        plt.xlabel('q [$1/\AA$]')
+        plt.ylabel('R(q)')
         plt.xscale('log')
         plt.yscale('log')
         plt.show()
