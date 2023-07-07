@@ -1,7 +1,5 @@
 """
-  TODO:
-  - Read DREAM fit results into model object
-  -
+RL environment for time-resolved fitting
 """
 import numpy as np
 import gymnasium as gym
@@ -15,36 +13,6 @@ import refl1d
 from refl1d.names import *
 
 import fitting.model_utils
-
-
-def _dense(x, dtype='d'):
-    return np.ascontiguousarray(x, dtype)
-
-def convolve(xi, yi, x, dx, resolution='normal'):
-    r"""
-    Apply x-dependent gaussian resolution to the theory.
-
-    Returns convolution y[k] of width dx[k] at points x[k].
-
-    The theory function is a piece-wise linear spline which does not need to
-    be uniformly sampled.  The theory calculation points *xi* should be dense
-    enough to capture the "wiggle" in the theory function, and should extend
-    beyond the ends of the data measurement points *x*. Convolution at the
-    tails is truncated and normalized to area of overlap between the resolution
-    function in case the theory does not extend far enough.
-
-    *resolution* is 'normal' (default) or 'uniform'. Note that the uniform
-    distribution uses the $1-\sigma$ equivalent distribution width which is
-    $1/\sqrt{3}$ times the width of the rectangle.
-    """
-    from refl1d import refllib
-    xi, yi, x, dx = _dense(xi), _dense(yi), _dense(x), _dense(dx)
-    y = np.empty_like(x)
-    if resolution == 'uniform':
-        refllib.convolve_uniform(xi, yi, x, dx, y)
-    else:
-        refllib.convolve_gaussian(xi, yi, x, dx, y)
-    return y
 
 
 class SLDEnv(gym.Env):
