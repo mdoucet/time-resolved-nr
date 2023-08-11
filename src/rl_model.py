@@ -192,15 +192,15 @@ class SLDEnv(gym.Env):
         # Add a term for the boundary conditions (first and last times)
         if self.start_state:
             reward -= len(self.data) * np.sum( (action - self.normalized_parameters)**2 ) / len(self.normalized_parameters)
-        #    if self.allow_mixing:
-        #        reward -= len(self.data)*mixing
+            if self.allow_mixing:
+                reward -= len(self.data)*mixing
         if terminated and self.end_model:
             reward -= len(self.data) * np.sum( (action - self.normalized_end_parameters)**2 ) / len(self.normalized_end_parameters)
-        #    if self.allow_mixing:
-        #        reward -= len(self.data)*mixing
+            if self.allow_mixing:
+                reward -= len(self.data)*mixing
 
-        if self.allow_mixing:
-            reward -= len(self.data)*mixing
+        #if self.allow_mixing:
+        #    reward -= mixing
 
         self.start_state = False
 
