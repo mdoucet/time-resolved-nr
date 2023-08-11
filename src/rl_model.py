@@ -192,12 +192,15 @@ class SLDEnv(gym.Env):
         # Add a term for the boundary conditions (first and last times)
         if self.start_state:
             reward -= len(self.data) * np.sum( (action - self.normalized_parameters)**2 ) / len(self.normalized_parameters)
-            if self.allow_mixing:
-                reward -= len(self.data)*mixing
+        #    if self.allow_mixing:
+        #        reward -= len(self.data)*mixing
         if terminated and self.end_model:
             reward -= len(self.data) * np.sum( (action - self.normalized_end_parameters)**2 ) / len(self.normalized_end_parameters)
-            if self.allow_mixing:
-                reward -= len(self.data)*mixing
+        #    if self.allow_mixing:
+        #        reward -= len(self.data)*mixing
+
+        if self.allow_mixing:
+            reward -= len(self.data)*mixing
 
         self.start_state = False
 
@@ -219,13 +222,13 @@ class SLDEnv(gym.Env):
     def plot(self, scale=1, newfig=True, errors=False, label=None):
         if newfig:
             fig = plt.figure(dpi=100)
-        plt.plot(self.q, self.refl*scale)
+        plt.plot(self.q, self.refl*scale, color='gray')
 
         idx = self.data[self.time_stamp][1] > self.data[self.time_stamp][2]
         _label = label if label is not None else str(self.time_stamp)
         if errors:
             plt.errorbar(self.data[self.time_stamp][0][idx], self.data[self.time_stamp][1][idx]*scale,
-                         yerr=self.data[self.time_stamp][2][idx]*scale, label=_label)
+                         yerr=self.data[self.time_stamp][2][idx]*scale, label=_label, linestyle='', marker='.')
         else:
             plt.plot(self.data[self.time_stamp][0][idx], self.data[self.time_stamp][1][idx]*scale,
                      label=_label)
