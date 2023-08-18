@@ -33,6 +33,7 @@ class SLDEnv(gym.Env):
         self.reverse = reverse
         self.q_resolution = 0.028
         self.allow_mixing = allow_mixing
+        self.mix_first_action = False
 
         if data is None:
             self.q = np.logspace(np.log10(0.009), np.log10(0.2), num=150)
@@ -165,12 +166,18 @@ class SLDEnv(gym.Env):
         _, self.refl = self.ref_model.reflectivity()
 
         if self.allow_mixing and not self.start_state:
-            if self.reverse:
-                self.set_model_parameters(self.end_parameters)
+            if self.mix_first_action:
+                self.set_model_parameters(self.first_time_pars)
+                _, _refl = self.ref_model.reflectivity()
             else:
-                self.set_model_parameters(self.parameters)
-            _, _refl = self.ref_model.reflectivity()
+                if self.reverse:
+                    self.set_model_parameters(self.end_parameters)
+                else:
+                    self.set_model_parameters(self.parameters)
+                _, _refl = self.ref_model.reflectivity()
             self.refl = (1 - mixing) * self.refl + mixing * _refl
+        elif self.allow_mixing and self.start_state:
+            self.first_time_pars = np.copy(pars)
 
         # Compute reward
         idx = self.data[self.time_stamp][2] > 0
@@ -190,17 +197,19 @@ class SLDEnv(gym.Env):
         state = np.array([state], dtype=np.float32)
 
         # Add a term for the boundary conditions (first and last times)
+        ranges = self.high_array - self.low_array
         if self.start_state:
-            reward -= len(self.data) * np.sum( (action - self.normalized_parameters)**2 ) / len(self.normalized_parameters)
+            reward -= len(self.data) * np.sum( (action - self.normalized_parameters)**2/ranges**2)# / len(self.normalized_parameters)
             if self.allow_mixing:
-                reward -= len(self.data)*mixing
+                reward -= len(self.data)*mixing**2
+
         if terminated and self.end_model:
-            reward -= len(self.data) * np.sum( (action - self.normalized_end_parameters)**2 ) / len(self.normalized_end_parameters)
-            if self.allow_mixing:
-                reward -= len(self.data)*mixing
+            reward -= len(self.data) * np.sum( (action - self.normalized_end_parameters)**2 /ranges**2)# / len(self.normalized_end_parameters)
+            #if self.allow_mixing:
+            #    reward -= len(self.data)*mixing**2
 
         #if self.allow_mixing:
-        #    reward -= mixing
+        #    reward -= len(self.data)*mixing**2
 
         self.start_state = False
 
@@ -226,6 +235,7 @@ class SLDEnv(gym.Env):
 
         idx = self.data[self.time_stamp][1] > self.data[self.time_stamp][2]
         _label = label if label is not None else str(self.time_stamp)
+        _label = str(label) + ' s'
         if errors:
             plt.errorbar(self.data[self.time_stamp][0][idx], self.data[self.time_stamp][1][idx]*scale,
                          yerr=self.data[self.time_stamp][2][idx]*scale, label=_label, linestyle='', marker='.')
