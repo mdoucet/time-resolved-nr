@@ -234,8 +234,11 @@ class SLDEnv(gym.Env):
         plt.plot(self.q, self.refl*scale, color='gray')
 
         idx = self.data[self.time_stamp][1] > self.data[self.time_stamp][2]
-        _label = label if label is not None else str(self.time_stamp)
-        _label = str(label) + ' s'
+        if label is not None:
+            _label = label
+        else:
+            _label = str(self.time_stamp) + ' s'
+
         if errors:
             plt.errorbar(self.data[self.time_stamp][0][idx], self.data[self.time_stamp][1][idx]*scale,
                          yerr=self.data[self.time_stamp][2][idx]*scale, label=_label, linestyle='', marker='.')

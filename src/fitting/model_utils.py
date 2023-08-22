@@ -199,3 +199,47 @@ def calculate_reflectivity(model_expt_json_file, q, q_resolution=0.025):
     expt = expt_from_json_file(model_expt_json_file, q, q_resolution=0.025)
     _, r = expt.reflectivity()
     return r
+
+def print_parameters(model_expt_json_file, model_err_json_file=None, latex=True):
+
+    mm = '$' if latex else ''
+    sep = '&' if latex else ''
+    pm = '\pm' if latex else '+-'
+
+    # Load the fit parameter information
+    if model_err_json_file is not None:
+        with open(model_err_json_file) as fd:
+            err_data = json.load(fd)
+    else:
+        err_data = {}
+
+    # Load the full model
+    with open(model_expt_json_file) as fd:
+        m = json.load(fd)
+        print("%-15s %-15s %-15s %-15s" % ("Name", "Thickness", "SLD", "Roughness"))
+        for layer in m['sample']['layers']:
+            layer_str = "%-15s" % layer['name']
+
+            # Thickness
+            par_name = layer['name']+' thickness'
+
+            if par_name in err_data:
+                layer_str += '%s%3.1f %s %3.1f%s %s' % (mm, err_data[par_name]['best'], pm, err_data[par_name]['std'], mm, sep)
+            else:
+                layer_str += '%s%3.1f%s           %s' % (mm, layer['thickness']['value'], mm, sep)
+
+            # SLD
+            par_name = layer['name']+' rho'
+            if par_name in err_data:
+                layer_str += '%s%3.2f %s %3.2f%s %s' % (mm, err_data[par_name]['best'], pm, err_data[par_name]['std'], mm, sep)
+            else:
+                layer_str += '%s%3.2f%s           %s' % (mm, layer['material']['rho']['value'], mm, sep)
+
+            # Roughness
+            par_name = layer['name']+' interface'
+            if par_name in err_data:
+                layer_str += '%s%3.2f %s %3.2f%s' % (mm, err_data[par_name]['best'], pm, err_data[par_name]['std'], mm)
+            else:
+                layer_str += '%s%3.2f%s' % (mm, layer['interface']['value'], mm)
+
+            print(layer_str)
