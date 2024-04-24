@@ -156,7 +156,10 @@ class SLDEnv(gym.Env):
         pars = self.convert_action_to_parameters(action)
 
         self.q = self.data[self.time_stamp][0]
-        dq = self.q_resolution * self.data[self.time_stamp][0]
+        if len(self.data[self.time_stamp]) > 3:
+            dq = self.data[self.time_stamp][3] / 2.35
+        else:
+            dq = self.q_resolution * self.data[self.time_stamp][0]
         probe = QProbe(self.q, dq, data=None)
         probe.intensity = Parameter(value=self.ref_model.probe.intensity.value,
                                     name=self.ref_model.probe.intensity.name)
@@ -198,12 +201,13 @@ class SLDEnv(gym.Env):
         state = np.array([state], dtype=np.float32)
 
         # Add a term for the boundary conditions (first and last times)
-        ranges = self.high_array - self.low_array
-        if self.start_state:
-            reward -= len(self.data) * np.sum( (action - self.normalized_parameters)**2 ) # /ranges**2)
+        if False:
+            ranges = self.high_array - self.low_array
+            if self.start_state:
+                reward -= len(self.data) * np.sum( (action - self.normalized_parameters)**2 /ranges**2)
 
-        if terminated and self.end_model and not self.allow_mixing:
-            reward -= len(self.data) * np.sum( (action - self.normalized_end_parameters)**2 ) # /ranges**2)
+            if terminated and self.end_model and not self.allow_mixing:
+                reward -= len(self.data) * np.sum( (action - self.normalized_end_parameters)**2 /ranges**2)
 
         self.start_state = False
 
@@ -245,4 +249,4 @@ class SLDEnv(gym.Env):
         plt.ylabel('R(q)')
         plt.xscale('log')
         plt.yscale('log')
-        plt.show()
+        #plt.show()
