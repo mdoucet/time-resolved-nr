@@ -18,7 +18,7 @@ import fitting.model_utils
 class SLDEnv(gym.Env):
 
     def __init__(self, initial_state_file=None, final_state_file=None, data=None, reverse=True,
-                 allow_mixing=False, mix_first_action=False):
+                 allow_mixing=False, mix_first_action=False, use_steady_states=True):
         """
             Initial and final states are in chronological order. The reverse parameter
             will take care of swapping the start and end states.
@@ -35,6 +35,7 @@ class SLDEnv(gym.Env):
         self.q_resolution = 0.028
         self.allow_mixing = allow_mixing
         self.mix_first_action = mix_first_action
+        self.use_steady_states = use_steady_states
 
         if data is None:
             self.q = np.logspace(np.log10(0.009), np.log10(0.2), num=150)
@@ -201,7 +202,7 @@ class SLDEnv(gym.Env):
         state = np.array([state], dtype=np.float32)
 
         # Add a term for the boundary conditions (first and last times)
-        if False:
+        if self.use_steady_states:
             ranges = self.high_array - self.low_array
             if self.start_state:
                 reward -= len(self.data) * np.sum( (action - self.normalized_parameters)**2 /ranges**2)
@@ -249,4 +250,3 @@ class SLDEnv(gym.Env):
         plt.ylabel('R(q)')
         plt.xscale('log')
         plt.yscale('log')
-        #plt.show()
