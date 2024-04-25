@@ -205,10 +205,10 @@ class SLDEnv(gym.Env):
         if self.use_steady_states:
             ranges = self.high_array - self.low_array
             if self.start_state:
-                reward -= len(self.data) * np.sum( (action - self.normalized_parameters)**2 /ranges**2)
+                reward -= len(self.data) * np.mean( (action - self.normalized_parameters)**2 )
 
             if terminated and self.end_model and not self.allow_mixing:
-                reward -= len(self.data) * np.sum( (action - self.normalized_end_parameters)**2 /ranges**2)
+                reward -= len(self.data) * np.mean( (action - self.normalized_end_parameters)**2 )
 
         self.start_state = False
 

@@ -37,13 +37,15 @@
 
 # Notes and next steps
 
-In this case we used one in every five curve, about a minute apart. So we have 80 curves.
+In this case we used one in every five curve, about a minute apart, except for the first 10 curves.
+So we have 88 curves.
 Although this is lower than the total number of available curves, it shows an interesting
 limitation of the approach. There are two timescales involved. Fast changes happen in the first
 few curves, and slow change happens afterwards. Because we maximize the total reward, the
 disagreement at early times is outweighed by the good agreement at later times.
 One could run the training longer and eventually have a better agreement at early times, but
-this would not be efficient.
+this would not be efficient. Picking how many curves we skip also influences how fast we
+converge.
 
 A better approach would be to add an action parameter to choose a number of points/times to
 skip. Once could approximate the evolution between two times as being linear and compute the
