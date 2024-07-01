@@ -9,9 +9,9 @@ from .bayes_experiment import BayesSLD as SLD
 from .bayes_experiment import BayesSlab as Slab
 from .bayes_experiment import BayesExperiment as Experiment
 
-ERR_MIN_ROUGH = 3
-ERR_MIN_THICK = 5
-ERR_MIN_RHO = 0.2
+ERR_MIN_ROUGH = 0#3
+ERR_MIN_THICK = 0#5
+ERR_MIN_RHO = 0#0.2
 
 def print_model(model0, model1):
     print("                   Initial \t            Step")

@@ -6,7 +6,6 @@ import gymnasium as gym
 
 import matplotlib as mpl
 from matplotlib import pyplot as plt
-from matplotlib import animation
 
 import json
 import refl1d
@@ -17,7 +16,6 @@ import fitting.model_utils
 
 MIN_VALUES = [0, 0, -5, 0]
 MAX_VALUES = [1000, 200, 10, 10]
-SPACE_AS_TUPLE = False
 VARY_IRHO = False
 
 class AnalyzerEnv(gym.Env):
@@ -49,17 +47,9 @@ class AnalyzerEnv(gym.Env):
         # layer index [int from 0 to 1]
         # layer parameter [0:thickness, 1:interface, 2:rho, 3:irho]
         # value [float between -1 and 1]
-        if SPACE_AS_TUPLE:
-            self.action_space = gym.spaces.Tuple((gym.spaces.Discrete(3, start=-1),
-                                                  gym.spaces.Box(0, 1, shape=(1,), dtype=np.float32),
-                                                  gym.spaces.Discrete(4),
-                                                  gym.spaces.Box(0, 1, shape=(1,), dtype=np.float32)))
-            self.observation_space = gym.spaces.Tuple((gym.spaces.Box(0, self.max_layers, shape=(1,), dtype=np.int32),
-                                                       gym.spaces.Box(0, 1, shape=(self.max_layers, 4), dtype=np.float32)))
-        else:
-            self.action_space = gym.spaces.Box(0, 1, shape=(4,), dtype=np.float32)
-            n_obs = self.max_layers * 4 + 1
-            self.observation_space = gym.spaces.Box(0, 1, shape=(n_obs,), dtype=np.float32)
+        self.action_space = gym.spaces.Box(0, 1, shape=(4,), dtype=np.float32)
+        n_obs = self.max_layers * 4 + 1
+        self.observation_space = gym.spaces.Box(0, 1, shape=(n_obs,), dtype=np.float32)
 
     def parameters_to_observation(self, state):
         """
@@ -68,47 +58,14 @@ class AnalyzerEnv(gym.Env):
         """
         observation = np.zeros_like(self.observation_space.sample())
 
-        if SPACE_AS_TUPLE:
-            observation[0][0] = len(state)
-            for i, layer in enumerate(state):
-                for j, param in enumerate(layer):
-                    observation[1][i, j] = (param - MIN_VALUES[j]) / (MAX_VALUES[j] - MIN_VALUES[j])
-        else:
-            observation[0] = len(state) / self.max_layers
-            for i, layer in enumerate(state):
-                for j, param in enumerate(layer):
-                    observation[i * 4 + j + 1] = (param - MIN_VALUES[j]) / (MAX_VALUES[j] - MIN_VALUES[j])
+        observation[0] = len(state) / self.max_layers
+        for i, layer in enumerate(state):
+            for j, param in enumerate(layer):
+                observation[i * 4 + j + 1] = (param - MIN_VALUES[j]) / (MAX_VALUES[j] - MIN_VALUES[j])
         
         return observation
 
-    def _update_state_from_tuple(self, action, verbose=False):
-        """
-            Update the state based on the action
-        """
-        action_type = action[0]            
-        layer_param = action[2]
-        layer_index = int(np.floor(action[1] * (self.state[0][0] - 2.00001)) + 1)
-
-        # TODO: check edge cases
-        if action_type == -1:
-            # Delete layer
-            new_state = np.delete(self.state[1], layer_index, axis=0)
-            self.state = [self.state[0] - 1, new_state]
-            #print('Deleting layer', layer_index)
-        elif action_type == 0:
-            # Keep structure as-is, but modify parameters
-            self.state[1][layer_index, layer_param] = action[3]
-            #print("Setting layer %d, parameter %d to %f" % (layer_index, action[2], action[3]))
-        elif action_type == 1:
-            # Insert layer and set layer parameters
-            layer_pars = np.asarray([0.05, 0.005, 0.6, 0])
-            layer_pars[layer_param] = action[3]
-            # When inserting a layer, we refer to the following index, therefore the +1
-            new_state = np.insert(self.state[1], layer_index + 1, layer_pars, axis=0)
-            self.state = [self.state[0] + 1, new_state]
-            #print("Inserting layer at index %d with parameters %s=%s" % (layer_index, action[2], layer_pars))
-
-    def _update_state_from_array(self, action, verbose=False):
+    def update_state(self, action, verbose=False):
         """
             Update the state based on the action
 
@@ -149,13 +106,19 @@ class AnalyzerEnv(gym.Env):
             # First check whether we have reached the maximum number of layers
             if n_layers >= self.max_layers:
                 return -1
+            # When inserting a layer, we refer to the following index, therefore the +1
+            layer_index = int(np.floor(action[1] * (n_layers - 1.00001)))
             # Insert layer and set layer parameters
             layer_pars = np.asarray([0.05, 0.005, 0.6, 0])
             layer_pars[layer_param] = action[3]
+            if layer_param == 0:
+                # Set the roughness to an appropriate value
+                thickness = action[3] * (MAX_VALUES[0] - MIN_VALUES[0]) + MIN_VALUES[0]
+                neighbor_thickness = self.state[(layer_index + 1) * 4 + 1] * (MAX_VALUES[0] - MIN_VALUES[0]) + MIN_VALUES[0]
+                rough = 0.5 * min(thickness, neighbor_thickness)
+                layer_pars[1] = (rough - MIN_VALUES[1]) / (MAX_VALUES[1] - MIN_VALUES[1])
             # Increase the number of layers
             self.state[0] = (n_layers + 1) / self.max_layers
-            # When inserting a layer, we refer to the following index, therefore the +1
-            layer_index = int(np.floor(action[1] * (n_layers - 1.00001)))
             # The layer can be the buffer but not the substrate
             self.state = np.insert(self.state, (layer_index + 1) * 4 + 1, layer_pars)
             # Remove the last layer to keep the array of the same langth
@@ -164,15 +127,6 @@ class AnalyzerEnv(gym.Env):
                 print(" - Inserting layer at index %d with parameters %s=%s" % (layer_index+1, action[2], layer_pars))
 
         return 0
-
-    def update_state(self, action, verbose=False):
-        """
-            Update the state based on the action
-        """
-        if SPACE_AS_TUPLE:
-            return self._update_state_from_tuple(action, verbose=verbose)
-        else:
-            return self._update_state_from_array(action, verbose=verbose)
 
     def print_parameters(self, pars):
         print("\nCurrent parameters:")
@@ -186,21 +140,13 @@ class AnalyzerEnv(gym.Env):
         """
         # Convert the observation space to real units
         pars = []
-        if SPACE_AS_TUPLE:
-            for i in range(self.state[0][0]):
-                thickness = self.state[1][i, 0] * (MAX_VALUES[0] - MIN_VALUES[0]) + MIN_VALUES[0]
-                interface = self.state[1][i, 1] * (MAX_VALUES[1] - MIN_VALUES[1]) + MIN_VALUES[1]
-                rho = self.state[1][i, 2] * (MAX_VALUES[2] - MIN_VALUES[2]) + MIN_VALUES[2]
-                irho = self.state[1][i, 3] * (MAX_VALUES[3] - MIN_VALUES[3]) + MIN_VALUES[3]
-                pars.append([thickness, interface, rho, irho])
-        else:
-            n_layers = int(np.floor(self.state[0] * (self.max_layers - 0.00001) )) + 1
-            for i in range(n_layers):
-                thickness = self.state[i * 4 + 1] * (MAX_VALUES[0] - MIN_VALUES[0]) + MIN_VALUES[0]
-                interface = self.state[i * 4 + 2] * (MAX_VALUES[1] - MIN_VALUES[1]) + MIN_VALUES[1]
-                rho = self.state[i * 4 + 3] * (MAX_VALUES[2] - MIN_VALUES[2]) + MIN_VALUES[2]
-                irho = self.state[i * 4 + 4] * (MAX_VALUES[3] - MIN_VALUES[3]) + MIN_VALUES[3]
-                pars.append([thickness, interface, rho, irho])
+        n_layers = int(np.floor(self.state[0] * (self.max_layers - 0.00001) )) + 1
+        for i in range(n_layers):
+            thickness = self.state[i * 4 + 1] * (MAX_VALUES[0] - MIN_VALUES[0]) + MIN_VALUES[0]
+            interface = self.state[i * 4 + 2] * (MAX_VALUES[1] - MIN_VALUES[1]) + MIN_VALUES[1]
+            rho = self.state[i * 4 + 3] * (MAX_VALUES[2] - MIN_VALUES[2]) + MIN_VALUES[2]
+            irho = self.state[i * 4 + 4] * (MAX_VALUES[3] - MIN_VALUES[3]) + MIN_VALUES[3]
+            pars.append([thickness, interface, rho, irho])
         return pars
 
     def _get_experiment_from_pars(self, pars):
@@ -250,45 +196,65 @@ class AnalyzerEnv(gym.Env):
 
         # Fit the model
         #TODO: clean this up!
-        if n_fit_pars > 0:
+        if n_fit_pars > 0 and self.engine is not None:
             problem = FitProblem(experiment)
             results = fit(problem, method=self.engine, samples=2000, burn=2000, pop=20, verbose=None)
+            self.results = results
+            self.problem = problem
             # Update the state with the fitted parameters
             # The fit results are in the order interface, irho, rho, thickness
             # Our pars are in the order thickness, interface, rho, irho
             n_pars_per_layer = 4 if VARY_IRHO else 3
             for i, par in enumerate(results.x):
                 layer_index = i // n_pars_per_layer + 1
-                # interface
-                if i % n_pars_per_layer == 0:
-                    value = (par - MIN_VALUES[0]) / (MAX_VALUES[0] - MIN_VALUES[0])
-                    self.state[layer_index * 4 + 1 + 1] = value
-                    #pars[layer_idx][1] = par
-                # irho if we vary it, otherwise rho
-                elif i % n_pars_per_layer == 1:
-                    if VARY_IRHO:
-                        value = (par - MIN_VALUES[3]) / (MAX_VALUES[3] - MIN_VALUES[3])
-                        self.state[layer_index * 4 + 3 + 1] = value
-                        #pars[layer_idx][3] = par
-                    else:
-                        value = (par - MIN_VALUES[2]) / (MAX_VALUES[2] - MIN_VALUES[2])
-                        self.state[layer_index * 4 + 2 + 1] = value
-                        #pars[layer_idx][2] = par
-                # rho if we vary irho, otherwise thickness
-                elif i % n_pars_per_layer == 2:
-                    if VARY_IRHO:
-                        value = (par - MIN_VALUES[2]) / (MAX_VALUES[2] - MIN_VALUES[2])
-                        self.state[layer_index * 4 + 2 + 1] = value
-                        #pars[layer_idx][2] = par
-                    else:
+
+                # The base parameter index is where the layer parameters start in the state
+                base_index = layer_index * 4 + 1
+
+                # The index offset is used to map the fit parameters to the state parameters
+                if VARY_IRHO:
+                    index_offset = [1, 3, 2, 0]
+                else:
+                    index_offset = [1, 2, 0]
+
+                # The index of the parameter in the fit results
+                fit_index = i % n_pars_per_layer
+
+                value = (par - MIN_VALUES[index_offset[fit_index]]) / (MAX_VALUES[index_offset[fit_index]] - MIN_VALUES[index_offset[fit_index]])
+                self.state[base_index + index_offset[fit_index]] = value
+
+                if False:
+
+                    # interface
+                    if i % n_pars_per_layer == 0:
+                        value = (par - MIN_VALUES[1]) / (MAX_VALUES[1] - MIN_VALUES[1])
+                        self.state[layer_index * 4 + 1 + 1] = value
+                        #pars[layer_idx][1] = par
+                    # irho if we vary it, otherwise rho
+                    elif i % n_pars_per_layer == 1:
+                        if VARY_IRHO:
+                            value = (par - MIN_VALUES[3]) / (MAX_VALUES[3] - MIN_VALUES[3])
+                            self.state[layer_index * 4 + 3 + 1] = value
+                            #pars[layer_idx][3] = par
+                        else:
+                            value = (par - MIN_VALUES[2]) / (MAX_VALUES[2] - MIN_VALUES[2])
+                            self.state[layer_index * 4 + 2 + 1] = value
+                            #pars[layer_idx][2] = par
+                    # rho if we vary irho, otherwise thickness
+                    elif i % n_pars_per_layer == 2:
+                        if VARY_IRHO:
+                            value = (par - MIN_VALUES[2]) / (MAX_VALUES[2] - MIN_VALUES[2])
+                            self.state[layer_index * 4 + 2 + 1] = value
+                            #pars[layer_idx][2] = par
+                        else:
+                            value = (par - MIN_VALUES[0]) / (MAX_VALUES[0] - MIN_VALUES[0])
+                            self.state[layer_index * 4 + 0 + 1] = value
+                            #pars[layer_idx][0] = par
+                    # if we vary irho, the last parameter is thickness
+                    elif i % n_pars_per_layer == 3:
                         value = (par - MIN_VALUES[0]) / (MAX_VALUES[0] - MIN_VALUES[0])
                         self.state[layer_index * 4 + 0 + 1] = value
                         #pars[layer_idx][0] = par
-                # if we vary irho, the last parameter is thickness
-                elif i % n_pars_per_layer == 3:
-                    value = (par - MIN_VALUES[0]) / (MAX_VALUES[0] - MIN_VALUES[0])
-                    self.state[layer_index * 4 + 0 + 1] = value
-                    #pars[layer_idx][0] = par
 
         _, self.refl = experiment.reflectivity()
         self.z, self.sld, _ = experiment.smooth_profile()
@@ -299,6 +265,10 @@ class AnalyzerEnv(gym.Env):
         """
         truncated = False
         info = {}
+
+        if verbose:
+            print("BEFORE:")
+            self.print_parameters(self._get_pars_from_state())
 
         retval = self.update_state(action, verbose=verbose)
         # Stop if we have an illegal action
@@ -334,10 +304,10 @@ class AnalyzerEnv(gym.Env):
         terminated = self.chi2 < self.reward_cutoff
         reward = reward + 100 if terminated else reward
 
-        if self.step_counter > 50:
+        if self.step_counter > 40:
             if verbose:
                 print('Terminating due to too many steps')
-            terminated = True
+            #terminated = True
             truncated = True
             reward -= 100
 
