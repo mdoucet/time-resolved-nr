@@ -11,6 +11,7 @@ import json
 import refl1d
 from refl1d.names import *
 from bumps.fitters import fit
+from bumps.dream import entropy
 
 import fitting.model_utils
 
@@ -186,7 +187,7 @@ class AnalyzerEnv(gym.Env):
         experiment = Experiment(probe=probe, sample=sample)
         return experiment, n_fit_pars
 
-    def compute_reflectivity_from_state(self):
+    def compute_reflectivity_from_state(self, perform_fit=True):
 
         pars = self._get_pars_from_state()
         #self.print_parameters(pars)
@@ -196,9 +197,9 @@ class AnalyzerEnv(gym.Env):
 
         # Fit the model
         #TODO: clean this up!
-        if n_fit_pars > 0 and self.engine is not None:
+        if perform_fit and n_fit_pars > 0 and self.engine is not None:
             problem = FitProblem(experiment)
-            results = fit(problem, method=self.engine, samples=2000, burn=2000, pop=20, verbose=None)
+            results = fit(problem, method=self.engine, samples=1000, burn=1000, verbose=None)
             self.results = results
             self.problem = problem
             # Update the state with the fitted parameters
@@ -288,7 +289,22 @@ class AnalyzerEnv(gym.Env):
         # but also a decrease compared to the previous step
         #reward = self.chi2_0 - chi2
         #reward += self.chi2 - chi2
-        reward = - chi2
+        #reward = - chi2
+
+        if self.results is not None and self.engine == 'dream':
+            points, _logp = self.results.state.sample(portion=1)
+
+            #S = entropy.mvn_entropy_bootstrap(points, samples=1500)
+            S_kde = entropy.kde_entropy_sklearn_gmm(points, n_est=1000)
+            if self.entropy == 0:
+                self.entropy = S_kde
+
+            # The reward is the information gain
+            # For the first fit, it's zero
+            reward = self.entropy - S_kde
+            self.entropy = S_kde - chi2
+        else:
+            reward = -chi2
 
         self.chi2 = chi2
 
@@ -298,7 +314,7 @@ class AnalyzerEnv(gym.Env):
         n_layers = int(np.floor(self.state[0] * (self.max_layers - 0.00001) ))
         #print(n_layers, len(self.initial_state))
         added_layers = max(0, n_layers - len(self.initial_state))
-        reward -= added_layers * 0.1
+        #reward -= added_layers * 0.1
         #reward -= self.step_counter * 0.01
 
         terminated = self.chi2 < self.reward_cutoff
@@ -321,11 +337,12 @@ class AnalyzerEnv(gym.Env):
 
         # Keep track of the state since the action modifies it and we will need it later.
         self.state = self.parameters_to_observation(self.initial_state)
-        self.compute_reflectivity_from_state()
+        self.compute_reflectivity_from_state(False)
         
         idx = self.data[2] > 0        
         self.chi2 = np.sum( (self.refl[idx] - self.data[1][idx])**2 / self.data[2][idx]**2 ) / len(self.data[2][idx])
         self.chi2_0 = self.chi2
+        self.entropy = 0
         self.step_counter = 0
         info = {}
         return self.state, info
@@ -352,13 +369,13 @@ class AnalyzerEnv(gym.Env):
             fig, axs = plt.subplots(2,1, dpi=100, figsize=(6,8), sharex=False)
         
         ax = plt.subplot(2, 1, 1)
-        plt.plot(self.q, self.refl*scale, color='gray')
+        plt.plot(self.q, self.refl*scale, color='gray', label='prediction')
 
         idx = self.data[1] > self.data[2]
         if label is not None:
             _label = label
         else:
-            _label = 'prediction'
+            _label = 'data'
 
         if errors:
             plt.errorbar(self.data[0][idx], self.data[1][idx]*scale,
@@ -375,3 +392,5 @@ class AnalyzerEnv(gym.Env):
 
         ax = plt.subplot(2, 1, 2)
         plt.plot(self.z[-1] - self.z, self.sld, color='gray')
+        plt.xlabel('z [$\AA$]')
+        plt.ylabel('SLD')
