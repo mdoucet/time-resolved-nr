@@ -12,7 +12,7 @@ import json
 import refl1d
 from refl1d.names import *
 
-import fitting.model_utils
+import model_utils
 
 
 class SLDEnv(gym.Env):
@@ -66,11 +66,24 @@ class SLDEnv(gym.Env):
         return data_list
 
     def setup_model(self):
-        self.ref_model = fitting.model_utils.expt_from_json_file(self.expt_file, self.q, q_resolution=self.q_resolution, set_ranges=True)
+        # Create QProbe matching tNR data
+        zeros = np.zeros(len(self.q))
+        dq = self.q_resolution * self.q
+        probe = QProbe(self.q, dq)
+    
+        expt = model_utils.expt_from_json_file(self.expt_file, 
+                                               keep_original_ranges=True)
+        probe.intensity = Parameter(value=expt.probe.intensity.value,
+                                    name=expt.probe.intensity.name)
+        probe.background = Parameter(value=expt.probe.background.value,
+                                    name=expt.probe.background.name)
+        self.ref_model = Experiment(probe=probe, sample=expt.sample)
+
         if self.end_expt_file:
-            self.end_model = fitting.model_utils.expt_from_json_file(self.end_expt_file, self.q, q_resolution=self.q_resolution, set_ranges=True)
+            self.end_model = model_utils.expt_from_json_file(self.end_expt_file, keep_original_ranges=True)
         else:
             self.end_model = None
+        # May need to set the q resolution
         _, self.refl = self.ref_model.reflectivity()
         self.get_model_parameters()
 
@@ -84,29 +97,29 @@ class SLDEnv(gym.Env):
             if not layer.thickness.fixed:
                 self.par_labels.append(str(layer.thickness))
                 self.parameters.append(layer.thickness.value)
-                self.low_array.append(layer.thickness.bounds.limits[0])
-                self.high_array.append(layer.thickness.bounds.limits[1])
+                self.low_array.append(layer.thickness.bounds[0])
+                self.high_array.append(layer.thickness.bounds[1])
                 if self.end_model:
                     self.end_parameters.append(self.end_model.sample[i].thickness.value)
             if not layer.interface.fixed:
                 self.par_labels.append(str(layer.interface))
                 self.parameters.append(layer.interface.value)
-                self.low_array.append(layer.interface.bounds.limits[0])
-                self.high_array.append(layer.interface.bounds.limits[1])
+                self.low_array.append(layer.interface.bounds[0])
+                self.high_array.append(layer.interface.bounds[1])
                 if self.end_model:
                     self.end_parameters.append(self.end_model.sample[i].interface.value)
             if not layer.material.rho.fixed:
                 self.par_labels.append(str(layer.material.rho))
                 self.parameters.append(layer.material.rho.value)
-                self.low_array.append(layer.material.rho.bounds.limits[0])
-                self.high_array.append(layer.material.rho.bounds.limits[1])
+                self.low_array.append(layer.material.rho.bounds[0])
+                self.high_array.append(layer.material.rho.bounds[1])
                 if self.end_model:
                     self.end_parameters.append(self.end_model.sample[i].material.rho.value)
             if not layer.material.irho.fixed:
                 self.par_labels.append(str(layer.material.irho))
                 self.parameters.append(layer.material.irho.value)
-                self.low_array.append(layer.material.irho.bounds.limits[0])
-                self.high_array.append(layer.material.irho.bounds.limits[1])
+                self.low_array.append(layer.material.irho.bounds[0])
+                self.high_array.append(layer.material.irho.bounds[1])
                 if self.end_model:
                     self.end_parameters.append(self.end_model.sample[i].material.irho.value)
         self.parameters = np.asarray(self.parameters)
@@ -157,6 +170,7 @@ class SLDEnv(gym.Env):
         pars = self.convert_action_to_parameters(action)
 
         self.q = self.data[self.time_stamp][0]
+        # Should check Q resolution
         if len(self.data[self.time_stamp]) > 3:
             dq = self.data[self.time_stamp][3] / 2.35
         else:
