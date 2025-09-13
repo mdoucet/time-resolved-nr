@@ -1,55 +1,12 @@
-import os
 import json
-import numpy as np
 
-import refl1d
-from refl1d.names import QProbe, Parameter, SLD, Slab, Experiment
+from refl1d.names import QProbe, SLD, Slab, Experiment
 
 from bumps import serialize
 
 ERR_MIN_ROUGH = 1
 ERR_MIN_THICK = 1
 ERR_MIN_RHO = 0.2
-
-
-def print_model(model0, model1):
-    print("                   Initial \t            Step")
-    for p in model0.keys():
-        if p in model1:
-            print(
-                "%15s %7.3g +- %-7.2g \t %7.3g +- %-7.2g"
-                % (
-                    p,
-                    model0[p]["best"],
-                    model0[p]["std"],
-                    model1[p]["best"],
-                    model1[p]["std"],
-                )
-            )
-        else:
-            print("%15s %7.3g +- %-7.2g" % (p, model0[p]["best"], model0[p]["std"]))
-
-
-def sample_from_json_file(
-    model_expt_json_file, model_err_json_file=None, prior_scale=1, set_ranges=False
-):
-    """
-    Return the sample object described by the provided json data.
-
-    If model_err_json is provided, it will be used to set the width of
-    the prior distribution.
-    """
-    with open(model_expt_json_file, "r") as fd:
-        expt = json.load(fd)
-
-    err = None
-    if model_err_json_file:
-        with open(model_err_json_file, "r") as fd:
-            err = json.load(fd)
-
-    return sample_from_json(
-        expt, model_err_json=err, prior_scale=prior_scale, set_ranges=set_ranges
-    )
 
 
 def sample_from_json(
@@ -164,43 +121,9 @@ def sample_from_json(
     return sample
 
 
-def fix_all_parameters(expt, verbose=False):
-    """
-    Fix all the parameters within an Experiment object
-
-    Parameters
-    ----------
-    expt : Experiment
-        Experiment object to process
-    verbose : bool
-        If True, print out parameters that were not fixed
-    """
-    pars = expt.parameters()
-
-    def _fix_parameters(item):
-        if type(item) is Parameter:
-            if verbose and not item.fixed:
-                print("Found %s" % item)
-            item.fixed = True
-        elif type(item) is list:
-            for p in item:
-                _fix_parameters(p)
-        elif type(item) is dict:
-            for p, v in item.items():
-                _fix_parameters(v)
-        else:
-            print("Found unknown parameter: %s" % item)
-
-    _fix_parameters(pars)
-
-
 def expt_from_json_file(
     model_expt_json_file: str,
     probe: "QProbe | None" = None,
-    model_err_json_file: str = None,
-    prior_scale: float = 1,
-    set_ranges: bool = False,
-    keep_original_ranges: bool = False,
 ):
     """
     Load an Experiment from an experiment json file.
@@ -218,14 +141,6 @@ def expt_from_json_file(
         -expt.json file
     probe : QProbe
         Optional Probe object to replace the one found in the serialized Experiment
-    model_err_json_file : str
-        -err.json file containing the uncertainties from the previous fit
-    prior_scale : float
-        Optional parameter to multiply the width of the Bayesian prior by
-    set_ranges : bool
-        If False, all the parameters should be fixed
-    keep_original_ranges : bool
-        If True, the parameter ranges found in the Experiment file will be kept
 
     Returns
     -------
@@ -235,17 +150,6 @@ def expt_from_json_file(
         serialized = input_file.read()
         serialized_dict = json.loads(serialized)
         expt = serialize.deserialize(serialized_dict, migration=True)
-
-    if not keep_original_ranges:
-        # Since this Experiment was created by a fit to an initial/final state,
-        # it may not have the correct fit parameters. Fix all the parameters
-        # and set the correct fit parameters according to the provided uncertainty file.
-        fix_all_parameters(expt)
-
-        # set_ranges and providing the err.json file are redundent information...
-        # TODO refactor this
-        if not set_ranges:
-            pass
 
     # If the probe was provided, create a new experiment with it.
     if probe is not None:

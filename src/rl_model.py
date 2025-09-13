@@ -1,27 +1,31 @@
 """
 RL environment for time-resolved fitting
 """
+
 import numpy as np
 import gymnasium as gym
 
-import matplotlib as mpl
 from matplotlib import pyplot as plt
-from matplotlib import animation
 
-import json
-import refl1d
-from refl1d.names import *
+from refl1d.names import QProbe, Parameter, Experiment
 
 import model_utils
 
 
 class SLDEnv(gym.Env):
-
-    def __init__(self, initial_state_file=None, final_state_file=None, data=None, reverse=True,
-                 allow_mixing=False, mix_first_action=False, use_steady_states=True):
+    def __init__(
+        self,
+        initial_state_file=None,
+        final_state_file=None,
+        data=None,
+        reverse=True,
+        allow_mixing=False,
+        mix_first_action=False,
+        use_steady_states=True,
+    ):
         """
-            Initial and final states are in chronological order. The reverse parameter
-            will take care of swapping the start and end states.
+        Initial and final states are in chronological order. The reverse parameter
+        will take care of swapping the start and end states.
         """
         super().__init__()
         if reverse:
@@ -46,7 +50,7 @@ class SLDEnv(gym.Env):
         self.setup_model()
 
         # The state will correspond to the [time interval i] / [number of time intervals]
-        self.time_stamp = len(data)-1 if self.reverse else 0
+        self.time_stamp = len(data) - 1 if self.reverse else 0
         self.time_increment = -1 if self.reverse else 1
         self.start_state = True
 
@@ -54,9 +58,13 @@ class SLDEnv(gym.Env):
         action_size = len(self.low_array)
         if allow_mixing:
             action_size += 1
-        self.action_space = gym.spaces.Box(low=-1, high=1, shape=[action_size], dtype=np.float32)
+        self.action_space = gym.spaces.Box(
+            low=-1, high=1, shape=[action_size], dtype=np.float32
+        )
         # Observation space is the timestamp
-        self.observation_space = gym.spaces.Box(low=0., high=1., shape=(1,), dtype=np.float32)
+        self.observation_space = gym.spaces.Box(
+            low=0.0, high=1.0, shape=(1,), dtype=np.float32
+        )
 
     def check_data(self, data):
         data_list = []
@@ -67,20 +75,20 @@ class SLDEnv(gym.Env):
 
     def setup_model(self):
         # Create QProbe matching tNR data
-        zeros = np.zeros(len(self.q))
         dq = self.q_resolution * self.q
         probe = QProbe(self.q, dq)
-    
-        expt = model_utils.expt_from_json_file(self.expt_file, 
-                                               keep_original_ranges=True)
-        probe.intensity = Parameter(value=expt.probe.intensity.value,
-                                    name=expt.probe.intensity.name)
-        probe.background = Parameter(value=expt.probe.background.value,
-                                    name=expt.probe.background.name)
+
+        expt = model_utils.expt_from_json_file(self.expt_file)
+        probe.intensity = Parameter(
+            value=expt.probe.intensity.value, name=expt.probe.intensity.name
+        )
+        probe.background = Parameter(
+            value=expt.probe.background.value, name=expt.probe.background.name
+        )
         self.ref_model = Experiment(probe=probe, sample=expt.sample)
 
         if self.end_expt_file:
-            self.end_model = model_utils.expt_from_json_file(self.end_expt_file, keep_original_ranges=True)
+            self.end_model = model_utils.expt_from_json_file(self.end_expt_file)
         else:
             self.end_model = None
         # May need to set the q resolution
@@ -114,33 +122,45 @@ class SLDEnv(gym.Env):
                 self.low_array.append(layer.material.rho.bounds[0])
                 self.high_array.append(layer.material.rho.bounds[1])
                 if self.end_model:
-                    self.end_parameters.append(self.end_model.sample[i].material.rho.value)
+                    self.end_parameters.append(
+                        self.end_model.sample[i].material.rho.value
+                    )
             if not layer.material.irho.fixed:
                 self.par_labels.append(str(layer.material.irho))
                 self.parameters.append(layer.material.irho.value)
                 self.low_array.append(layer.material.irho.bounds[0])
                 self.high_array.append(layer.material.irho.bounds[1])
                 if self.end_model:
-                    self.end_parameters.append(self.end_model.sample[i].material.irho.value)
+                    self.end_parameters.append(
+                        self.end_model.sample[i].material.irho.value
+                    )
         self.parameters = np.asarray(self.parameters)
         self.end_parameters = np.asarray(self.end_parameters)
         self.low_array = np.asarray(self.low_array)
         self.high_array = np.asarray(self.high_array)
-        self.normalized_parameters = 2 * ( self.parameters - self.low_array ) / (self.high_array - self.low_array) - 1
-        #TODO: the end state might not have the same ranges
+        self.normalized_parameters = (
+            2 * (self.parameters - self.low_array) / (self.high_array - self.low_array)
+            - 1
+        )
+        # TODO: the end state might not have the same ranges
         if self.end_model:
-            self.normalized_end_parameters = 2 * ( self.end_parameters - self.low_array ) / (self.high_array - self.low_array) - 1
+            self.normalized_end_parameters = (
+                2
+                * (self.end_parameters - self.low_array)
+                / (self.high_array - self.low_array)
+                - 1
+            )
 
     def convert_action_to_parameters(self, parameters):
         """
-            Convert parameters from action space to physics spaces
+        Convert parameters from action space to physics spaces
         """
         deltas = self.high_array - self.low_array
         return self.low_array + deltas * (parameters + 1.0) / 2.0
 
     def set_model_parameters(self, values):
         """
-            Parameters are normalized from 0 to 1
+        Parameters are normalized from 0 to 1
         """
         counter = 0
 
@@ -163,7 +183,7 @@ class SLDEnv(gym.Env):
 
     def step(self, action):
         if self.allow_mixing:
-            mixing = (action[-1] + 1)/2.0
+            mixing = (action[-1] + 1) / 2.0
             action = action[:-1]
         truncated = False
         info = {}
@@ -176,10 +196,14 @@ class SLDEnv(gym.Env):
         else:
             dq = self.q_resolution * self.data[self.time_stamp][0]
         probe = QProbe(self.q, dq, data=None)
-        probe.intensity = Parameter(value=self.ref_model.probe.intensity.value,
-                                    name=self.ref_model.probe.intensity.name)
-        probe.background = Parameter(value=self.ref_model.probe.background.value,
-                                    name=self.ref_model.probe.intensity.name)
+        probe.intensity = Parameter(
+            value=self.ref_model.probe.intensity.value,
+            name=self.ref_model.probe.intensity.name,
+        )
+        probe.background = Parameter(
+            value=self.ref_model.probe.background.value,
+            name=self.ref_model.probe.intensity.name,
+        )
         self.ref_model.probe = probe
         self.set_model_parameters(pars)
         _, self.refl = self.ref_model.reflectivity()
@@ -200,7 +224,10 @@ class SLDEnv(gym.Env):
 
         # Compute reward
         idx = self.data[self.time_stamp][2] > 0
-        reward = -np.sum( (self.refl[idx] - self.data[self.time_stamp][1][idx])**2 / self.data[self.time_stamp][2][idx]**2 ) / len(self.data[self.time_stamp][2][idx])
+        reward = -np.sum(
+            (self.refl[idx] - self.data[self.time_stamp][1][idx]) ** 2
+            / self.data[self.time_stamp][2][idx] ** 2
+        ) / len(self.data[self.time_stamp][2][idx])
 
         # Store the chi2
         self.chi2 = -reward
@@ -208,21 +235,25 @@ class SLDEnv(gym.Env):
         if self.reverse:
             terminated = self.time_stamp <= 0
         else:
-            terminated = self.time_stamp >= len(self.data)-1
+            terminated = self.time_stamp >= len(self.data) - 1
 
         # Move to the next time time_stamp
         self.time_stamp += self.time_increment
-        state = self.time_stamp / (len(self.data)-1)
+        state = self.time_stamp / (len(self.data) - 1)
         state = np.array([state], dtype=np.float32)
 
         # Add a term for the boundary conditions (first and last times)
         if self.use_steady_states:
-            ranges = self.high_array - self.low_array
+            _ = self.high_array - self.low_array
             if self.start_state:
-                reward -= len(self.data) * np.mean( (action - self.normalized_parameters)**2 )
+                reward -= len(self.data) * np.mean(
+                    (action - self.normalized_parameters) ** 2
+                )
 
             if terminated and self.end_model and not self.allow_mixing:
-                reward -= len(self.data) * np.mean( (action - self.normalized_end_parameters)**2 )
+                reward -= len(self.data) * np.mean(
+                    (action - self.normalized_end_parameters) ** 2
+                )
 
         self.start_state = False
 
@@ -231,8 +262,8 @@ class SLDEnv(gym.Env):
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
         self.setup_model()
-        self.time_stamp = len(self.data)-1 if self.reverse else 0
-        state = self.time_stamp / (len(self.data)-1)
+        self.time_stamp = len(self.data) - 1 if self.reverse else 0
+        state = self.time_stamp / (len(self.data) - 1)
         state = np.array([state], dtype=np.float32)
         self.start_state = True
         info = {}
@@ -243,24 +274,33 @@ class SLDEnv(gym.Env):
 
     def plot(self, scale=1, newfig=True, errors=False, label=None):
         if newfig:
-            fig = plt.figure(dpi=100)
-        plt.plot(self.q, self.refl*scale, color='gray')
+            plt.figure(dpi=100)
+        plt.plot(self.q, self.refl * scale, color="gray")
 
         idx = self.data[self.time_stamp][1] > self.data[self.time_stamp][2]
         if label is not None:
             _label = label
         else:
-            _label = str(self.time_stamp) + ' s'
+            _label = str(self.time_stamp) + " s"
 
         if errors:
-            plt.errorbar(self.data[self.time_stamp][0][idx], self.data[self.time_stamp][1][idx]*scale,
-                         yerr=self.data[self.time_stamp][2][idx]*scale, label=_label, linestyle='', marker='.')
+            plt.errorbar(
+                self.data[self.time_stamp][0][idx],
+                self.data[self.time_stamp][1][idx] * scale,
+                yerr=self.data[self.time_stamp][2][idx] * scale,
+                label=_label,
+                linestyle="",
+                marker=".",
+            )
         else:
-            plt.plot(self.data[self.time_stamp][0][idx], self.data[self.time_stamp][1][idx]*scale,
-                     label=_label)
+            plt.plot(
+                self.data[self.time_stamp][0][idx],
+                self.data[self.time_stamp][1][idx] * scale,
+                label=_label,
+            )
 
         plt.gca().legend()
-        plt.xlabel('q [$1/\AA$]')
-        plt.ylabel('R(q)')
-        plt.xscale('log')
-        plt.yscale('log')
+        plt.xlabel("q [$1/\AA$]")
+        plt.ylabel("R(q)")
+        plt.xscale("log")
+        plt.yscale("log")

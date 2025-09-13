@@ -15,7 +15,7 @@ python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install --upgrade pip
 pip install -r requirements.txt
-pip install -r ipykernel # Optional: To use the jupyter notebooks
+pip install ipykernel # Optional: To use the jupyter notebooks
 pip install -e .
 ```
 
