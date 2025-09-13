@@ -9,7 +9,7 @@ from matplotlib import pyplot as plt
 
 from refl1d.names import QProbe, Parameter, Experiment
 
-import model_utils
+from timeref import model_utils
 
 
 class SLDEnv(gym.Env):
@@ -277,30 +277,45 @@ class SLDEnv(gym.Env):
             plt.figure(dpi=100)
         plt.plot(self.q, self.refl * scale, color="gray")
 
-        idx = self.data[self.time_stamp][1] > self.data[self.time_stamp][2]
+        # Check if time_stamp is valid for the data
+        if self.time_stamp >= len(self.data):
+            # If time_stamp is out of range, use the last available data point
+            time_idx = len(self.data) - 1
+        else:
+            time_idx = self.time_stamp
+            
+        # Check if data has error information (3rd column)
+        time_data = self.data[time_idx]
+        has_errors = len(time_data) >= 3 and time_data[2] is not None
+        
+        if has_errors:
+            idx = time_data[1] > time_data[2]
+        else:
+            idx = slice(None)  # Use all data points
+            
         if label is not None:
             _label = label
         else:
-            _label = str(self.time_stamp) + " s"
+            _label = str(time_idx) + " s"
 
-        if errors:
+        if errors and has_errors:
             plt.errorbar(
-                self.data[self.time_stamp][0][idx],
-                self.data[self.time_stamp][1][idx] * scale,
-                yerr=self.data[self.time_stamp][2][idx] * scale,
+                time_data[0][idx],
+                time_data[1][idx] * scale,
+                yerr=time_data[2][idx] * scale,
                 label=_label,
                 linestyle="",
                 marker=".",
             )
         else:
             plt.plot(
-                self.data[self.time_stamp][0][idx],
-                self.data[self.time_stamp][1][idx] * scale,
+                time_data[0][idx],
+                time_data[1][idx] * scale,
                 label=_label,
             )
 
-        plt.gca().legend()
-        plt.xlabel("q [$1/\AA$]")
+        plt.gca().legend(frameon=False)
+        plt.xlabel("q [$1/\\AA$]")
         plt.ylabel("R(q)")
         plt.xscale("log")
         plt.yscale("log")

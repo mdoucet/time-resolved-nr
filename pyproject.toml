@@ -33,11 +33,15 @@ dependencies = [
     "matplotlib",
     "lmfit",
     "gymnasium",
-    "stable-baselines3"
+    "stable-baselines3",
+    "click"
 ]
 
 [project.urls]
 Homepage = "https://github.com/mdoucet/time-resolved-nr"
+
+[project.scripts]
+timeref = "timeref.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["timeref"]
