@@ -29,8 +29,8 @@ from .fixtures import (
 class TestSampleFromJson:
     """Test cases for sample_from_json function"""
 
-    @patch("model_utils.SLD")
-    @patch("model_utils.Slab")
+    @patch("timeref.model_utils.SLD")
+    @patch("timeref.model_utils.Slab")
     def test_sample_from_json_basic(self, mock_slab, mock_sld, sample_model_expt_json):
         """Test basic functionality with valid JSON data"""
         # Mock the SLD and Slab objects
@@ -68,8 +68,8 @@ class TestSampleFromJson:
         # Verify the result is properly combined
         assert result is not None
 
-    @patch("model_utils.SLD")
-    @patch("model_utils.Slab")
+    @patch("timeref.model_utils.SLD")
+    @patch("timeref.model_utils.Slab")
     def test_sample_from_json_with_errors(
         self, mock_slab, mock_sld, sample_model_expt_json, sample_model_err_json
     ):
@@ -107,8 +107,8 @@ class TestSampleFromJson:
         assert mock_param.dev.called
         assert result is not None
 
-    @patch("model_utils.SLD")
-    @patch("model_utils.Slab")
+    @patch("timeref.model_utils.SLD")
+    @patch("timeref.model_utils.Slab")
     def test_sample_from_json_prior_scale_zero(
         self, mock_slab, mock_sld, sample_model_expt_json, sample_model_err_json
     ):
@@ -143,8 +143,8 @@ class TestSampleFromJson:
         assert not mock_param.dev.called
         assert result is not None
 
-    @patch("model_utils.SLD")
-    @patch("model_utils.Slab")
+    @patch("timeref.model_utils.SLD")
+    @patch("timeref.model_utils.Slab")
     def test_sample_from_json_set_ranges_true(
         self, mock_slab, mock_sld, sample_model_expt_json
     ):
@@ -174,8 +174,8 @@ class TestSampleFromJson:
         assert not mock_param.fixed
         assert result is not None
 
-    @patch("model_utils.SLD")
-    @patch("model_utils.Slab")
+    @patch("timeref.model_utils.SLD")
+    @patch("timeref.model_utils.Slab")
     def test_sample_from_json_fixed_parameters(
         self, mock_slab, mock_sld, minimal_model_expt_json
     ):
@@ -209,8 +209,8 @@ class TestSampleFromJson:
 class TestExptFromJsonFile:
     """Test cases for expt_from_json_file function"""
 
-    @patch("model_utils.serialize.deserialize")
-    @patch("model_utils.json.loads")
+    @patch("timeref.model_utils.serialize.deserialize")
+    @patch("timeref.model_utils.json.loads")
     @patch("builtins.open", new_callable=mock_open)
     def test_expt_from_json_file_basic(
         self, mock_file, mock_json_loads, mock_deserialize
@@ -233,9 +233,9 @@ class TestExptFromJsonFile:
 
         assert result == mock_experiment
 
-    @patch("model_utils.Experiment")
-    @patch("model_utils.serialize.deserialize")
-    @patch("model_utils.json.loads")
+    @patch("timeref.model_utils.Experiment")
+    @patch("timeref.model_utils.serialize.deserialize")
+    @patch("timeref.model_utils.json.loads")
     @patch("builtins.open", new_callable=mock_open)
     def test_expt_from_json_file_with_probe(
         self, mock_file, mock_json_loads, mock_deserialize, mock_experiment_class
@@ -271,7 +271,7 @@ class TestExptFromJsonFile:
             expt_from_json_file("nonexistent_file.json")
 
     @patch(
-        "model_utils.json.loads",
+        "timeref.model_utils.json.loads",
         side_effect=json.JSONDecodeError("Invalid JSON", "", 0),
     )
     @patch("builtins.open", new_callable=mock_open)
@@ -286,7 +286,7 @@ class TestExptFromJsonFile:
 class TestCalculateReflectivity:
     """Test cases for calculate_reflectivity function"""
 
-    @patch("model_utils.expt_from_json_file")
+    @patch("timeref.model_utils.expt_from_json_file")
     def test_calculate_reflectivity_basic(self, mock_expt_from_json):
         """Test basic reflectivity calculation"""
         # Setup mock experiment
@@ -311,7 +311,7 @@ class TestCalculateReflectivity:
         # Verify result
         assert result == [0.1, 0.05, 0.02]
 
-    @patch("model_utils.expt_from_json_file")
+    @patch("timeref.model_utils.expt_from_json_file")
     def test_calculate_reflectivity_custom_resolution(self, mock_expt_from_json):
         """Test reflectivity calculation with custom resolution"""
         mock_experiment = Mock()
@@ -332,7 +332,7 @@ class TestCalculateReflectivity:
         assert result == [0.2, 0.1]
 
     @patch(
-        "model_utils.expt_from_json_file",
+        "timeref.model_utils.expt_from_json_file",
         side_effect=FileNotFoundError("File not found"),
     )
     def test_calculate_reflectivity_file_not_found(self, mock_expt_from_json):
@@ -344,10 +344,10 @@ class TestCalculateReflectivity:
 class TestIntegration:
     """Integration tests for model_utils functions"""
 
-    @patch("model_utils.SLD")
-    @patch("model_utils.Slab")
-    @patch("model_utils.serialize.deserialize")
-    @patch("model_utils.json.loads")
+    @patch("timeref.model_utils.SLD")
+    @patch("timeref.model_utils.Slab")
+    @patch("timeref.model_utils.serialize.deserialize")
+    @patch("timeref.model_utils.json.loads")
     @patch("builtins.open", new_callable=mock_open)
     def test_workflow_sample_and_experiment(
         self,

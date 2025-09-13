@@ -97,10 +97,10 @@ def mock_expt():
 class TestSLDEnv:
     """Test cases for SLDEnv class"""
 
-    @patch("rl_model.model_utils.expt_from_json_file")
-    @patch("rl_model.QProbe")
-    @patch("rl_model.Parameter")
-    @patch("rl_model.Experiment")
+    @patch("timeref.rl_model.model_utils.expt_from_json_file")
+    @patch("timeref.rl_model.QProbe")
+    @patch("timeref.rl_model.Parameter")
+    @patch("timeref.rl_model.Experiment")
     def test_init_basic(
         self,
         mock_experiment_class,
@@ -142,10 +142,10 @@ class TestSLDEnv:
         """Test data validation and conversion"""
         # Create a mock environment instance to test check_data
         with (
-            patch("rl_model.model_utils.expt_from_json_file"),
-            patch("rl_model.QProbe"),
-            patch("rl_model.Parameter"),
-            patch("rl_model.Experiment"),
+            patch("timeref.rl_model.model_utils.expt_from_json_file"),
+            patch("timeref.rl_model.QProbe"),
+            patch("timeref.rl_model.Parameter"),
+            patch("timeref.rl_model.Experiment"),
         ):
             env = SLDEnv.__new__(SLDEnv)  # Create without calling __init__
             result = env.check_data(sample_data)
@@ -158,10 +158,10 @@ class TestSLDEnv:
     def test_convert_action_to_parameters(self, sample_data):
         """Test conversion from action space to parameter space"""
         with (
-            patch("rl_model.model_utils.expt_from_json_file"),
-            patch("rl_model.QProbe"),
-            patch("rl_model.Parameter"),
-            patch("rl_model.Experiment"),
+            patch("timeref.rl_model.model_utils.expt_from_json_file"),
+            patch("timeref.rl_model.QProbe"),
+            patch("timeref.rl_model.Parameter"),
+            patch("timeref.rl_model.Experiment"),
         ):
             env = SLDEnv.__new__(SLDEnv)
             env.low_array = np.array([0, 10, 100])
