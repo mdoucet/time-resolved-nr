@@ -1,0 +1,58 @@
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q --tb=short --cov=timeref"
+testpaths = [
+    "tests",
+]
+
+[build-system]
+requires = ["setuptools", "versioningit", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "timeref"
+version = "1.1.0"
+description = "RL for time-resolved neutron reflectometry"
+readme = "README.md"
+authors = [
+    { name = "Mat Doucet", email = "doucetm@ornl.gov" },
+]
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "numpy",
+    "pandas",
+    "plotly",
+    "scipy",
+    "periodictable",
+    "refl1d==1.0.0rc0",
+    "matplotlib",
+    "lmfit",
+    "gymnasium",
+    "stable-baselines3"
+]
+
+[project.urls]
+Homepage = "https://github.com/mdoucet/time-resolved-nr"
+
+[tool.setuptools.packages.find]
+where = ["timeref"]
+
+[tool.versioningit.vcs]
+method = "git"
+default-tag = "0.0.1"
+
+[tool.versioningit.next-version]
+method = "minor"
+
+[tool.versioningit.format]
+distance = "{next_version}.dev{distance}"
+dirty = "{version}+d{build_date:%Y%m%d}"
+distance-dirty = "{next_version}.dev{distance}+d{build_date:%Y%m%d%H%M}"
+
+[tool.versioningit.write]
+file = "timeref/_version.py"
