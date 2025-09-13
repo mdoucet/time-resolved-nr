@@ -1,0 +1,13 @@
+numpy
+pandas
+plotly
+scipy
+periodictable
+refl1d==1.0.0rc0
+matplotlib
+lmfit
+gymnasium
+stable-baselines3
+pytest
+pytest-cov
+pytest-mock

@@ -1,11 +1,22 @@
 # Repository for the analysis of time-resolved NR data with reinforcement learning
 
-To use this code, first install conda from here: https://docs.anaconda.com/free/miniconda/miniconda-install/
+## Installation
+
+Clone the repo:
+```
+git clone https://github.com/mdoucet/time-resolved-nr
+cd time-resolved-nr
+```
+
 
 Then create the environment:
 ```
-conda env create -f play_env.yml
-source activate playground
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install --upgrade pip
+pip install -r requirements.txt
+pip install ipykernel # Optional: To use the jupyter notebooks
+pip install -e .
 ```
 
 Examples from the paper are in the `notebooks` directory, and examples from users will be added to
