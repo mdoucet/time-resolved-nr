@@ -9,24 +9,30 @@ import os
 import json
 import logging
 from pydantic import BaseModel, Field
-from typing import Optional, List, Callable
+from typing import List
 from pathlib import Path
 import gymnasium as gym
 from stable_baselines3 import SAC
 from stable_baselines3.common.callbacks import CheckpointCallback
 from gymnasium.utils.env_checker import check_env
 
+from . import __version__
 from .rl_model import SLDEnv
+from .reports.plotting import plot_training_results
 
 
 class WorkflowConfig(BaseModel):
     """Configuration for the RL training workflow."""
 
     model_name: str = Field("sac", description="RL model name")
-    initial_state_file: str = Field(..., description="Path to the initial state file")
-    final_state_file: str = Field(..., description="Path to the final state file")
-    data_location: str = Field(..., description="Location of the time-resolved data")
-    output_dir: str | None = Field(..., description="Directory to save outputs")
+    initial_state_file: Path | None = Field(
+        None, description="Path to the initial state file"
+    )
+    final_state_file: Path | None = Field(
+        None, description="Path to the final state file"
+    )
+    data_location: Path = Field("", description="Location of the time-resolved data")
+    output_dir: Path = Field("./output", description="Directory to save outputs")
     preview: bool = Field(False, description="Preview mode without training")
     reverse: bool = Field(False, description="Train in reverse time order")
     evaluate: bool = Field(False, description="Evaluate a trained model")
@@ -40,8 +46,16 @@ class WorkflowConfig(BaseModel):
 
 def create_env(config: WorkflowConfig) -> SLDEnv:
     """Create the training environment."""
-    # Get data
+    logging.info("🏗️  Setting up RL environment...")
+
     time_resolved_data = load_data(config.data_location)
+
+    logging.info("📊 Environment info:")
+    logging.info(f"   - Number of time points: {len(time_resolved_data)}")
+    logging.info(f"   - Initial state: {config.initial_state_file}")
+    logging.info(f"   - Final state: {config.final_state_file}")
+    logging.info(f"   - Direction: {'reverse' if config.reverse else 'forward'}")
+    logging.info(f"   - Allow mixing: {config.allow_mixing}")
 
     # Register the custom environment
     gym.register(
@@ -58,39 +72,64 @@ def create_env(config: WorkflowConfig) -> SLDEnv:
     )
     check_env(env.unwrapped)
     env.reset()
+
+    if hasattr(env.unwrapped, "par_labels"):
+        logging.info(f"   - Trainable parameters: {len(env.unwrapped.par_labels)}")
+        for i, label in enumerate(env.unwrapped.par_labels):
+            logging.info(f"     {i + 1}. {label}")
+
     return env
 
 
 def learn(env: SLDEnv, config: WorkflowConfig) -> SAC:
     """Train the RL model."""
+    logging.info(f"🤖 Starting training for {config.n_steps} steps...")
+
+    output_dir = Path(config.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     model = SAC("MlpPolicy", env, verbose=1 if config.verbose else 0)
 
     # Create nice name for log directory
-    if config.output_dir is not None:
-        fwd_bck = "fwd" if not config.reverse else "bck"
-        log_dir = os.path.join(config.output_dir, f"logs-{config.model_name}-{fwd_bck}")
+    fwd_bck = "fwd" if not config.reverse else "bck"
+    log_dir = output_dir / f"logs-{config.model_name}-{fwd_bck}"
 
-        progress_callback = CheckpointCallback(
-            save_freq=1000,
-            save_path=log_dir,
-            name_prefix=f"rl_model-{fwd_bck}",
-            save_replay_buffer=False,
-            save_vecnormalize=True,
-        )
-    else:
-        progress_callback = None
+    progress_callback = CheckpointCallback(
+        save_freq=1000,
+        save_path=log_dir,
+        name_prefix=f"rl_model-{fwd_bck}",
+        save_replay_buffer=False,
+        save_vecnormalize=True,
+    )
 
     # Train the model
     model.learn(
         total_timesteps=config.n_steps, progress_bar=True, callback=progress_callback
     )
     # Save trained model
-    if config.output_dir is not None:
-        model_path = os.path.join(
-            config.output_dir, f"model-{config.model_name}-{fwd_bck}.zip"
-        )
-        model.save(model_path)
-        logging.info(f"Trained model saved: {model_path}")
+    model_path = output_dir / f"model-{config.model_name}-{fwd_bck}.zip"
+    model.save(model_path)
+    logging.info(f"📄 Trained model saved in: {model_path}")
+
+    # Save training metadata
+    metadata = {
+        "version": __version__,
+        "data_input": str(config.data_location),
+        "initial_state": str(config.initial_state_file),
+        "final_state": str(config.final_state_file),
+        "reverse": config.reverse,
+        "allow_mixing": config.allow_mixing,
+        "training_steps": config.n_steps,
+        "num_time_points": len(env.unwrapped.data),
+        "trainable_parameters": len(env.unwrapped.par_labels),
+        "parameter_labels": env.unwrapped.par_labels,
+    }
+
+    metadata_path = os.path.join(config.output_dir, "training_metadata.json")
+    with open(metadata_path, "w") as fd:
+        json.dump(metadata, fd, indent=2)
+
+    logging.info(f"🎉 Model trained successfully! Saved in: {output_dir}")
     return model
 
 
@@ -99,12 +138,25 @@ def load_model(model_path: str, env: SLDEnv) -> SAC:
     if not os.path.isfile(model_path):
         raise ValueError(f"Model file {model_path} does not exist")
     model = SAC.load(model_path, env=env)
+    logging.info(f"✅ Model loaded from {model_path}")
     return model
+
+
+def evaluate_model(env: SLDEnv, model: SAC, output_dir: Path) -> dict:
+    """Evaluate a trained RL model and save the results."""
+    eval_results = run_model(env, model)
+
+    plot_training_results(
+        env,
+        results=eval_results,
+        output_path=output_dir,
+    )
 
 
 def run_model(env: SLDEnv, model: SAC) -> dict:
     """Run the trained model in the environment and collect results."""
-    episode_reward = 0
+
+    logging.info("🧪 Running the trained model")
     n_times = len(env.data)
     obs, info = env.reset()
 
@@ -112,7 +164,6 @@ def run_model(env: SLDEnv, model: SAC) -> dict:
     episode_rewards = []
     episode_actions = []
     time_points = []
-    actions = []
     chi2 = []
 
     done = False
@@ -123,7 +174,8 @@ def run_model(env: SLDEnv, model: SAC) -> dict:
 
         episode_rewards.append(reward)
         episode_actions.append(action.copy())
-        time_points.append(env.unwrapped.time_stamp)
+        chi2.append(env.chi2)
+        time_points.append(env.time_stamp)
 
         done = terminated or truncated
         if done:
@@ -133,8 +185,11 @@ def run_model(env: SLDEnv, model: SAC) -> dict:
         "episode_rewards": episode_rewards,
         "episode_actions": episode_actions,
         "time_points": time_points,
+        "chi2": chi2,
+        "total_reward": sum(episode_rewards),
         "final_observation": obs,
         "info": info,
+        "parameter_labels": env.par_labels,
     }
     return results
 

@@ -5,20 +5,21 @@ This module provides a CLI for training reinforcement learning models on
 time-resolved neutron reflectometry data using the SLDEnv environment.
 """
 
-import json
-import click
+import logging
 from pathlib import Path
+import click
 
 from . import workflow
 from . import __version__
-from .reports.plotting import plot_initial_state, plot_training_results
+from .reports.plotting import plot_initial_state
 
 
-def setup_output_directory(output_dir):
-    """Create output directory if it doesn't exist."""
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
-    return output_path
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger(__name__)
 
 
 @click.command()
@@ -95,119 +96,25 @@ def main(
             allow_mixing=allow_mixing,
         )
 
-        # Setup output directory
-        output_path = setup_output_directory(output_dir)
-        click.echo(f"📁 Output directory: {output_path}")
-
-        # Load data
-        time_resolved_data = workflow.load_data(data)
-        click.echo(f"✅ Loaded data with {len(time_resolved_data)} time points")
-
-        click.echo(f"🏁 Initial state: {initial_state}")
-        click.echo(f"🎯 Final state: {final_state}")
-
         # Register and create environment
-        click.echo("🏗️  Setting up RL environment...")
         env = workflow.create_env(config)
 
         # Plot initial state
-        plot_path = plot_initial_state(env.unwrapped, output_path)
-        click.echo(f"📈 Initial state plot saved: {plot_path}")
-
-        click.echo("📊 Environment info:")
-        click.echo(f"   - Number of time points: {len(time_resolved_data)}")
-        click.echo(f"   - Direction: {'reverse' if reverse else 'forward'}")
-
-        # Show parameter info
-        if hasattr(env.unwrapped, "par_labels"):
-            click.echo(f"   - Trainable parameters: {len(env.unwrapped.par_labels)}")
-            for i, label in enumerate(env.unwrapped.par_labels):
-                click.echo(f"     {i + 1}. {label}")
-
+        plot_initial_state(env.unwrapped, config.output_dir, show=preview)
         if preview:
-            click.echo("👀 Preview mode: Environment setup complete, skipping training")
+            click.echo("👀 Preview mode: Environment setup only")
             return
 
         # Training
         if not config.evaluate:
-            click.echo(f"🤖 Starting training for {steps} steps...")
             model = workflow.learn(env, config)
-            click.echo("✅ Model trained successfully.")
         else:
-            click.echo("🤖 Loading trained model for evaluation...")
             model = workflow.load_model(config.model_path, env)
-            click.echo("✅ Model loaded successfully.")
 
         # Test trained model and generate results
-        click.echo("🧪 Testing trained model...")
-        try:
-            obs, info = env.reset()
-
-            # Run a full episode with the trained model
-            episode_rewards = []
-            episode_actions = []
-            time_points = []
-
-            done = False
-            step_count = 0
-
-            while not done and step_count < len(time_resolved_data):
-                action, _states = model.predict(obs, deterministic=True)
-                obs, reward, terminated, truncated, info = env.step(action)
-
-                episode_rewards.append(reward)
-                episode_actions.append(action.copy())
-                time_points.append(env.unwrapped.time_stamp)
-
-                done = terminated or truncated
-                step_count += 1
-
-            # Generate results visualization
-            trainable_params = env.unwrapped.par_labels
-            plot_path = plot_training_results(
-                env.unwrapped,
-                episode_rewards=episode_rewards,
-                episode_actions=episode_actions,
-                time_points=time_points,
-                reverse=reverse,
-                steps=steps,
-                trainable_params=trainable_params,
-                output_path=output_path,
-            )
-            click.echo(f"📈 Training results saved: {plot_path}")
-
-        except Exception as e:
-            click.echo(f"❌ Error during model testing: {e}")
-            if verbose:
-                import traceback
-
-                traceback.print_exc()
-            raise click.ClickException(f"Model testing failed: {e}")
-
-        # 11. Save training metadata
-        final_reward = episode_rewards[-1] if episode_rewards else None
-        metadata = {
-            "version": __version__,
-            "data_input": str(data),
-            "initial_state": str(initial_state),
-            "final_state": str(final_state),
-            "reverse": reverse,
-            "allow_mixing": allow_mixing,
-            "training_steps": steps,
-            "num_time_points": len(time_resolved_data),
-            "final_reward": float(final_reward) if final_reward is not None else None,
-            "episode_length": len(episode_rewards),
-            "trainable_parameters": len(trainable_params),
-            "parameter_labels": trainable_params,
-        }
-
-        metadata_path = output_path / "training_metadata.json"
-        with open(metadata_path, "w") as f:
-            json.dump(metadata, f, indent=2)
-        click.echo(f"📄 Training metadata saved: {metadata_path}")
+        workflow.evaluate_model(env.unwrapped, model, config.output_dir)
 
         click.echo("🎉 Training completed successfully!")
-        click.echo(f"📂 All results saved in: {output_path}")
 
     except Exception as e:
         click.echo(f"❌ Error: {e}", err=True)

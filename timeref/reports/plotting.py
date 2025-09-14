@@ -5,6 +5,7 @@ This module provides plotting utilities for visualizing SLD environment states,
 training results, and model comparisons.
 """
 
+import logging
 import matplotlib.pyplot as plt
 import numpy as np
 from pathlib import Path
@@ -82,12 +83,7 @@ def plot_sld_env_state(
 
 def plot_training_results(
     env: SLDEnv,
-    episode_rewards: list,
-    episode_actions: list,
-    time_points: list,
-    reverse: bool,
-    steps: int,
-    trainable_params: list,
+    results: dict,
     output_path: Path,
 ):
     """
@@ -95,12 +91,7 @@ def plot_training_results(
 
     Args:
         env: SLDEnv instance
-        episode_rewards: List of rewards from training episode
-        episode_actions: List of actions from training episode
-        time_points: List of time points
-        reverse: Whether training was in reverse direction
-        steps: Number of training steps
-        trainable_params: List of trainable parameter names
+        results: Dictionary containing training results
         output_path: Path to save the plot
 
     Returns:
@@ -114,15 +105,19 @@ def plot_training_results(
     plt.title("Final Model State")
 
     # Plot 2: Reward evolution
+    episode_rewards = results["episode_rewards"]
+    episode_actions = results["episode_actions"]
+    time_points = results["time_points"]
     plt.subplot(2, 2, 2)
     if episode_rewards:
         plt.plot(range(len(episode_rewards)), episode_rewards, "b-", linewidth=2)
-        plt.xlabel("Episode Step")
+        plt.xlabel("Time Step")
         plt.ylabel("Reward")
-        plt.title("Training Progress")
+        plt.title("Reward Evolution")
         plt.grid(True)
 
     # Plot 3: Action evolution
+    trainable_params = env.unwrapped.par_labels
     plt.subplot(2, 2, 3)
     if episode_actions:
         episode_actions_array = np.array(episode_actions)
@@ -141,13 +136,12 @@ def plot_training_results(
 
     # Plot 4: Training summary
     plt.subplot(2, 2, 4)
-    plt.text(0.1, 0.9, f"Training Steps: {steps}", fontsize=12)
     if episode_rewards:
         plt.text(0.1, 0.8, f"Final Reward: {episode_rewards[-1]:.2f}", fontsize=12)
         plt.text(0.1, 0.7, f"Episode Length: {len(episode_rewards)}", fontsize=12)
     plt.text(0.1, 0.6, f"Trainable Parameters: {len(trainable_params)}", fontsize=12)
     plt.text(0.1, 0.5, f"Data Points: {len(time_points)}", fontsize=12)
-    plt.text(0.1, 0.4, f"Direction: {'Reverse' if reverse else 'Forward'}", fontsize=12)
+    plt.text(0.1, 0.4, f"Direction: {'Reverse' if env.reverse else 'Forward'}", fontsize=12)
     plt.axis("off")
     plt.title("Training Summary")
 
@@ -158,17 +152,19 @@ def plot_training_results(
             output_path.mkdir(parents=True, exist_ok=True)
         plot_path = output_path / "training_results.png"
         plt.savefig(plot_path, dpi=150, bbox_inches="tight")
+        logging.info(f"📈 Training results saved: {plot_path}")
     plt.close()
     return plot_path
 
 
-def plot_initial_state(env: SLDEnv, output_path: Path):
+def plot_initial_state(env: SLDEnv, output_path: Path, show: bool = False) -> Path:
     """
     Plot and save the initial state of the environment.
 
     Args:
         env: SLDEnv instance
         output_path: Path to save the plot
+        show: Whether to display the plot
 
     Returns:
         Path to saved plot file
@@ -178,5 +174,7 @@ def plot_initial_state(env: SLDEnv, output_path: Path):
 
     plot_path = output_path / "initial_state.png"
     plt.savefig(plot_path, dpi=150, bbox_inches="tight")
-    plt.show()
+    logging.info(f"📈 Initial state plot saved: {plot_path}")
+    if show:
+        plt.show()
     return plot_path

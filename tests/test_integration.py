@@ -1,12 +1,11 @@
 import os
 import numpy as np
-import pytest
-
+from pathlib import Path
 
 from stable_baselines3 import SAC
 
 from timeref import workflow
-from timeref.reports.plotting import plot_sld_env_state
+from timeref.reports.plotting import plot_initial_state, plot_training_results
 
 
 class TestIntegration:
@@ -54,8 +53,13 @@ class TestIntegration:
         assert np.isclose(action[1], 0.30617, atol=1e-3)
         assert np.isclose(action[2], 0.58477, atol=1e-3)
 
-        plot_sld_env_state(env.unwrapped, errors=True, label="Initial state")
+        output_path = Path("/tmp")
+        plot_initial_state(env.unwrapped, output_path=output_path, show=False)
 
         # Short training to see if everything works
         model = workflow.learn(env, workflow_config)
         assert isinstance(model, SAC)
+
+        results = workflow.run_model(env.unwrapped, model)
+
+        plot_training_results(env.unwrapped, results=results, output_path=output_path)
