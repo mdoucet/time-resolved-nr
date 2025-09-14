@@ -11,7 +11,6 @@ git clone https://github.com/mdoucet/time-resolved-nr
 cd time-resolved-nr
 ```
 
-
 Then create the environment:
 ```
 python3 -m venv venv
