@@ -1,5 +1,8 @@
 # Analysis of time-resolved NR data with reinforcement learning
 
+[![Python Tests](https://github.com/mdoucet/time-resolved-nr/actions/workflows/python-test.yml/badge.svg)](https://github.com/mdoucet/time-resolved-nr/actions/workflows/python-test.yml)
+[![codecov](https://codecov.io/gh/mdoucet/time-resolved-nr/branch/main/graph/badge.svg)](https://codecov.io/gh/mdoucet/time-resolved-nr)
+
 ## Installation
 
 Clone the repo:
