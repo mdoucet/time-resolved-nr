@@ -3,7 +3,55 @@
 ## Project Overview
 Time-resolved neutron reflectometry analysis tool with machine learning components.
 
-## Recent Work (September 12-13, 2025)
+## Recent Work (September 14, 2025)
+
+### Enhanced Plotting Functionality for Parameter Evolution
+**Completed**: Refactored plotting module for better integration with workflow
+
+#### Key Changes
+
+1. **Modified `plot_parameter_evolution()` function**:
+   - **Simplified interface**: Now takes `env` and `results` from `run_model()` instead of separate parameters
+   - **Automatic parameter extraction**: Extracts episode actions, time points, and parameter labels from results
+   - **Flexible parameter handling**: Dynamically handles different numbers of parameters
+   - **Better error handling**: Graceful handling of missing initial/final parameters
+   - **Improved visualization**: Added grid lines, better legends, and proper axis labeling
+
+2. **Modified `plot_reflectivity_evolution()` function**:
+   - **Updated interface**: Now takes `env`, `model`, and `results` from `run_model()` instead of separate times array
+   - **Uses stored actions**: Replays episode actions from results instead of re-predicting
+   - **Consistent data flow**: Uses same results structure as other plotting functions
+   - **Better integration**: Uses `plot_sld_env_state()` for consistent plotting style
+
+3. **Updated workflow integration**:
+   - **Enhanced `evaluate_model()`**: Now calls all three plotting functions: `plot_training_results()`, `plot_parameter_evolution()`, and `plot_reflectivity_evolution()`
+   - **Proper imports**: Added both plotting functions to workflow imports
+   - **Return values**: `evaluate_model()` now returns evaluation results for further use
+
+4. **Added comprehensive test suite**:
+   - **7 new test cases** covering both plotting functions
+   - **Mock-based testing**: Uses unittest.mock to test plotting without file I/O
+   - **Full coverage**: Tests basic functionality, file output, and custom parameters
+   - **All tests passing**: 100% success rate for plotting module tests
+
+#### Technical Details
+
+- **Function signatures**: 
+  - `plot_parameter_evolution(env, results, initial_parameters=None, final_parameters=None, output_path=None, figsize=(6, 8), show=False)`
+  - `plot_reflectivity_evolution(env, model, results, output_path=None, figsize=(6, 15), q_range=(0.015, 0.12), show=False)`
+- **Data flow**: `run_model()` → `results` → plotting functions → PNG files
+- **Parameter display**: Flexible ordering and labeling based on environment parameter labels
+- **Output format**: High-quality PNG files with 150 DPI resolution
+
+#### Integration Benefits
+
+- **Simplified usage**: Workflow functions can now easily generate comprehensive visualization plots
+- **Consistent data flow**: All plotting functions use same results structure from `run_model()`
+- **Extensible design**: Easy to add more plotting features or modify visualization styles
+- **Better separation of concerns**: Plotting logic completely separated from workflow logic
+- **Comprehensive evaluation**: Single call to `evaluate_model()` generates all necessary plots
+
+## Previous Work (September 12-13, 2025)
 
 ### Unit Tests for model_utils.py (Sep 12)
 **Completed**: Comprehensive unit test suite for `src/model_utils.py`

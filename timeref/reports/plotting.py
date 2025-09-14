@@ -180,3 +180,183 @@ def plot_initial_state(env: SLDEnv, output_path: Path, show: bool = False) -> Pa
     if show:
         plt.show()
     return plot_path
+
+
+def plot_parameter_evolution(
+    env,
+    results,
+    initial_parameters=None,
+    final_parameters=None,
+    output_path=None,
+    figsize=(6, 8),
+    show=False,
+):
+    """
+    Plot parameter evolution over time from RL model results.
+
+    This creates a publication-quality figure showing how parameters evolve over time,
+    based on the episode actions from a trained RL model.
+
+    Args:
+        env: SLDEnv instance used for parameter information
+        results: Dictionary from run_model() containing episode data
+        initial_parameters: Optional array of initial parameter values
+        final_parameters: Optional array of final parameter values
+        output_path: Optional path to save the plot
+        figsize: Figure size tuple
+        show: Whether to display the plot
+
+    Returns:
+        Path to saved plot file if output_path provided, else None
+    """
+    # Extract data from results
+    episode_actions = np.array(results["episode_actions"])
+    time_points = np.array(results["time_points"])
+    parameter_labels = results["parameter_labels"]
+
+    # Calculate parameter statistics if not provided
+    if initial_parameters is None:
+        initial_parameters = episode_actions[0]
+    if final_parameters is None:
+        final_parameters = episode_actions[-1]
+    
+    # Transpose for easier indexing (n_params x n_times)
+    parameters = episode_actions.T
+
+    # Use actual parameter labels if available
+    axes_labels = [f"{label}" for label in parameter_labels]
+
+    fig, axs = plt.subplots(
+        len(parameters), 1, dpi=100, figsize=figsize, sharex=False
+    )
+    plt.subplots_adjust(left=0.15, right=0.95, top=0.98, bottom=0.1)
+
+    # Calculate time range for initial/final markers
+    t_delay = (time_points[-1] - time_points[0]) * 0.1  # 10% of total time range
+    t_initial = time_points[0] - t_delay
+    t_final = time_points[-1] + t_delay
+
+    for i in range(len(parameters)):
+        if len(parameters) > 1:
+            plt.subplot(len(parameters), 1, i + 1)
+
+        # Plot RL results
+        plt.plot(
+            time_points,
+            parameters[i],
+            label="RL",
+            marker=".",
+            markersize=6,
+            linestyle="-",
+            linewidth=1.5,
+        )
+
+        # Plot initial and final parameter values as stars
+        plt.plot(
+            [t_initial, t_final],
+            [initial_parameters[i], final_parameters[i]],
+            linestyle="",
+            marker="*",
+            markersize=10,
+            color="red",
+            label="Initial/Final" if i == 0 else "",
+        )
+
+        # Set y-label
+        if i < len(axes_labels):
+            plt.ylabel(axes_labels[i])
+        else:
+            plt.ylabel(f"Parameter {i + 1}")
+
+        # Add legend to first panel
+        if i == 0:
+            plt.legend(frameon=False)
+
+        plt.grid(True, alpha=0.3)
+
+    plt.xlabel("Time Steps")
+
+    if output_path:
+        plot_path = Path(output_path) / "parameter_evolution.png"
+        plt.savefig(plot_path, dpi=150, bbox_inches="tight")
+        logging.info(f"📈 Parameter evolution plot saved: {plot_path}")
+        if not show:
+            plt.close()
+        return plot_path
+    elif show:
+        plt.show()
+
+    return None
+
+
+def plot_reflectivity_evolution(
+    env,
+    model,
+    results,
+    output_path=None,
+    figsize=(6, 15),
+    q_range=(0.015, 0.12),
+    show=False,
+):
+    """
+    Plot reflectivity curves at different time points showing evolution.
+
+    Args:
+        env: SLDEnv instance
+        model: Trained RL model
+        results: Dictionary from run_model() containing episode data
+        output_path: Optional path to save the plot
+        figsize: Figure size tuple
+        q_range: Tuple of (q_min, q_max) for x-axis limits
+        show: Whether to display the plot
+
+    Returns:
+        Path to saved plot file if output_path provided, else None
+    """
+    # Extract data from results
+    episode_actions = results["episode_actions"]
+    time_points = results["time_points"]
+    n_times = len(episode_actions)
+
+    # Reset environment
+    obs, info = env.reset()
+
+    fig, ax = plt.subplots(dpi=120, figsize=figsize)
+    plt.subplots_adjust(left=0.15, right=0.95, top=0.98, bottom=0.05)
+
+    # Plot reflectivity at each time point with scaling
+    for i in range(1, n_times, 1):
+        # Use the actions from the results instead of predicting again
+        action = episode_actions[i]
+        obs, reward, terminated, truncated, info = env.step(action)
+
+        # Plot with exponential scaling for visibility
+        scale = 10.0**i
+        plot_sld_env_state(
+            env, 
+            scale=scale, 
+            newfig=False, 
+            errors=True, 
+            #label=f"{time_points[i]:.1f}s"
+            label=f"Time step {i}"
+        )
+
+    # Reverse legend order to match time progression
+    handles, labels = ax.get_legend_handles_labels()
+    plt.legend(
+        handles[::-1], labels[::-1], frameon=False, prop={"size": 9}, loc="upper right"
+    )
+
+    plt.xlim(q_range)
+
+    if output_path:
+        plot_path = Path(output_path) / "reflectivity_evolution.png"
+        plt.savefig(plot_path, dpi=150, bbox_inches="tight")
+        logging.info(f"📈 Reflectivity evolution plot saved: {plot_path}")
+        if not show:
+            plt.close()
+        return plot_path
+    elif show:
+        plt.show()
+
+    return None

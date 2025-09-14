@@ -18,7 +18,7 @@ from gymnasium.utils.env_checker import check_env
 
 from . import __version__
 from .rl_model import SLDEnv
-from .reports.plotting import plot_training_results
+from .reports.plotting import plot_training_results, plot_parameter_evolution, plot_reflectivity_evolution
 
 
 class WorkflowConfig(BaseModel):
@@ -152,6 +152,23 @@ def evaluate_model(env: SLDEnv, model: SAC, output_dir: Path) -> dict:
         results=eval_results,
         output_path=output_dir,
     )
+    
+    # Plot parameter evolution over time
+    plot_parameter_evolution(
+        env,
+        results=eval_results,
+        output_path=output_dir,
+    )
+    
+    # Plot reflectivity evolution over time
+    plot_reflectivity_evolution(
+        env,
+        model,
+        results=eval_results,
+        output_path=output_dir,
+    )
+    
+    return eval_results
 
 
 def run_model(env: SLDEnv, model: SAC) -> dict:
