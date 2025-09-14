@@ -63,6 +63,11 @@ logger = logging.getLogger(__name__)
     default=False,
     help="Allow mixing between states during training",
 )
+@click.option(
+    "--evaluate/--no-evaluate",
+    default=False,
+    help="Evaluate a trained model instead of training",
+)
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose output")
 @click.version_option(version=__version__, message="timeref version %(version)s")
 def main(
@@ -74,6 +79,7 @@ def main(
     output_dir,
     preview,
     allow_mixing,
+    evaluate,
     verbose,
 ):
     """
@@ -94,6 +100,7 @@ def main(
             reverse=reverse,
             n_steps=steps,
             allow_mixing=allow_mixing,
+            evaluate=evaluate,
         )
 
         # Register and create environment
@@ -109,13 +116,12 @@ def main(
         if not config.evaluate:
             model = workflow.learn(env, config)
         else:
-            model = workflow.load_model(config.model_path, env)
+            model = workflow.load_model(config)
 
         # Test trained model and generate results
         workflow.evaluate_model(env.unwrapped, model, config.output_dir)
 
-        click.echo("🎉 Training completed successfully!")
-
+        click.echo("✅ Done!")
     except Exception as e:
         click.echo(f"❌ Error: {e}", err=True)
         if verbose:

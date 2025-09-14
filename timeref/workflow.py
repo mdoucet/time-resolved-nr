@@ -107,7 +107,7 @@ def learn(env: SLDEnv, config: WorkflowConfig) -> SAC:
         total_timesteps=config.n_steps, progress_bar=True, callback=progress_callback
     )
     # Save trained model
-    model_path = output_dir / f"model-{config.model_name}-{fwd_bck}.zip"
+    model_path = output_dir / f"model-{config.model_name}-{fwd_bck}"
     model.save(model_path)
     logging.info(f"📄 Trained model saved in: {model_path}")
 
@@ -133,12 +133,13 @@ def learn(env: SLDEnv, config: WorkflowConfig) -> SAC:
     return model
 
 
-def load_model(model_path: str, env: SLDEnv) -> SAC:
+def load_model(config: WorkflowConfig) -> SAC:
     """Load a trained RL model."""
-    if not os.path.isfile(model_path):
-        raise ValueError(f"Model file {model_path} does not exist")
-    model = SAC.load(model_path, env=env)
-    logging.info(f"✅ Model loaded from {model_path}")
+    fwd_bck = "fwd" if not config.reverse else "bck"
+    model_path = config.output_dir / f"model-{config.model_name}-{fwd_bck}"
+
+    model = SAC.load(model_path)
+    logging.info(f"🤖 Model loaded from {model_path}")
     return model
 
 

@@ -141,7 +141,9 @@ def plot_training_results(
         plt.text(0.1, 0.7, f"Episode Length: {len(episode_rewards)}", fontsize=12)
     plt.text(0.1, 0.6, f"Trainable Parameters: {len(trainable_params)}", fontsize=12)
     plt.text(0.1, 0.5, f"Data Points: {len(time_points)}", fontsize=12)
-    plt.text(0.1, 0.4, f"Direction: {'Reverse' if env.reverse else 'Forward'}", fontsize=12)
+    plt.text(
+        0.1, 0.4, f"Direction: {'Reverse' if env.reverse else 'Forward'}", fontsize=12
+    )
     plt.axis("off")
     plt.title("Training Summary")
 
@@ -152,7 +154,7 @@ def plot_training_results(
             output_path.mkdir(parents=True, exist_ok=True)
         plot_path = output_path / "training_results.png"
         plt.savefig(plot_path, dpi=150, bbox_inches="tight")
-        logging.info(f"📈 Training results saved: {plot_path}")
+        logging.info(f"📈 Evaluation results saved: {plot_path}")
     plt.close()
     return plot_path
 
