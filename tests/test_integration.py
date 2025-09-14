@@ -1,13 +1,12 @@
 import os
-import json
 import numpy as np
 import pytest
 
-import gymnasium as gym
-from gymnasium.utils.env_checker import check_env
+
 from stable_baselines3 import SAC
 
-from timeref import rl_model
+from timeref import workflow
+from timeref.reports.plotting import plot_sld_env_state
 
 
 class TestIntegration:
@@ -25,28 +24,20 @@ class TestIntegration:
 
         data_file = os.path.join(data_dir, "r189245-time-resolved.json")
 
-        with open(data_file) as fd:
-            m = json.load(fd)
-            _data = m["data"]
-            print("Number of times: %s" % len(_data))
-
-        # Register the environment so we can create it with gym.make()
-        gym.register(
-            id="rl_model/SLDEnv-v1",
-            entry_point=rl_model.SLDEnv,
-        )
-        # Create an instance of our custom environment
-        env = gym.make(
-            "rl_model/SLDEnv-v1",
+        # Create workflow configuration
+        workflow_config = workflow.WorkflowConfig(
+            model_name="sac",
             initial_state_file=initial_state_expt_file,
             final_state_file=final_state_expt_file,
-            data=_data,
+            data_location=data_file,
+            output_dir="/tmp",
             reverse=False,
+            q_resolution=0.028,
+            n_steps=10,
         )
 
-        # use the Gymnasium 'check_env' function to check the environment
-        # - returns nothing if the environment is verified as ok
-        check_env(env.unwrapped)
+        # Create environment
+        env = workflow.create_env(workflow_config)
 
         # initialize the environment
         state, info = env.reset()
@@ -63,9 +54,8 @@ class TestIntegration:
         assert np.isclose(action[1], 0.30617, atol=1e-3)
         assert np.isclose(action[2], 0.58477, atol=1e-3)
 
-        env.unwrapped.plot(errors=True)
+        plot_sld_env_state(env.unwrapped, errors=True, label="Initial state")
 
         # Short training to see if everything works
-        model = SAC("MlpPolicy", env, use_sde=False, verbose=0)
-        model.learn(10)
-
+        model = workflow.learn(env, workflow_config)
+        assert isinstance(model, SAC)

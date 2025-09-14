@@ -1,4 +1,4 @@
-# Repository for the analysis of time-resolved NR data with reinforcement learning
+# Analysis of time-resolved NR data with reinforcement learning
 
 ## Installation
 
@@ -12,7 +12,7 @@ cd time-resolved-nr
 Then create the environment:
 ```
 python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
 pip install ipykernel # Optional: To use the jupyter notebooks

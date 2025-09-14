@@ -2,14 +2,13 @@
 RL environment for time-resolved fitting
 """
 
+import logging
 import numpy as np
 import gymnasium as gym
 
-from matplotlib import pyplot as plt
-
 from refl1d.names import QProbe, Parameter, Experiment
 
-from timeref import model_utils
+from . import model_utils
 
 
 class SLDEnv(gym.Env):
@@ -273,49 +272,12 @@ class SLDEnv(gym.Env):
         print(action)
 
     def plot(self, scale=1, newfig=True, errors=False, label=None):
-        if newfig:
-            plt.figure(dpi=100)
-        plt.plot(self.q, self.refl * scale, color="gray")
+        """
+        Plot the current state of the SLD environment.
 
-        # Check if time_stamp is valid for the data
-        if self.time_stamp >= len(self.data):
-            # If time_stamp is out of range, use the last available data point
-            time_idx = len(self.data) - 1
-        else:
-            time_idx = self.time_stamp
-            
-        # Check if data has error information (3rd column)
-        time_data = self.data[time_idx]
-        has_errors = len(time_data) >= 3 and time_data[2] is not None
-        
-        if has_errors:
-            idx = time_data[1] > time_data[2]
-        else:
-            idx = slice(None)  # Use all data points
-            
-        if label is not None:
-            _label = label
-        else:
-            _label = str(time_idx) + " s"
-
-        if errors and has_errors:
-            plt.errorbar(
-                time_data[0][idx],
-                time_data[1][idx] * scale,
-                yerr=time_data[2][idx] * scale,
-                label=_label,
-                linestyle="",
-                marker=".",
-            )
-        else:
-            plt.plot(
-                time_data[0][idx],
-                time_data[1][idx] * scale,
-                label=_label,
-            )
-
-        plt.gca().legend(frameon=False)
-        plt.xlabel("q [$1/\\AA$]")
-        plt.ylabel("R(q)")
-        plt.xscale("log")
-        plt.yscale("log")
+        This is a wrapper around the plotting function in timeref.reports.plotting
+        to maintain API compatibility while separating concerns.
+        """
+        from .reports.plotting import plot_sld_env_state
+        logging.warning("SLDEnv.plot is deprecated. Use the plotting function from timeref.reports.plotting instead.")
+        plot_sld_env_state(self, scale=scale, newfig=newfig, errors=errors, label=label)

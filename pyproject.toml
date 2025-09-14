@@ -33,8 +33,9 @@ dependencies = [
     "matplotlib",
     "lmfit",
     "gymnasium",
-    "stable-baselines3",
-    "click"
+    "stable-baselines3[extra]",
+    "click",
+    "pydantic"
 ]
 
 [project.urls]
