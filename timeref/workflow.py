@@ -8,6 +8,7 @@ on time-resolved neutron reflectometry data.
 import os
 import json
 import logging
+import numpy as np
 from pydantic import BaseModel, Field
 from typing import List
 from pathlib import Path
@@ -18,7 +19,11 @@ from gymnasium.utils.env_checker import check_env
 
 from . import __version__
 from .rl_model import SLDEnv
-from .reports.plotting import plot_training_results, plot_parameter_evolution, plot_reflectivity_evolution
+from .reports.plotting import (
+    plot_training_results,
+    plot_parameter_evolution,
+    plot_reflectivity_evolution,
+)
 
 
 class WorkflowConfig(BaseModel):
@@ -88,7 +93,20 @@ def learn(env: SLDEnv, config: WorkflowConfig) -> SAC:
     output_dir = Path(config.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    model = SAC("MlpPolicy", env, verbose=1 if config.verbose else 0)
+    model = SAC(
+        "MlpPolicy",
+        env,
+        verbose=1 if config.verbose else 0,
+        device="cuda",
+        ent_coef="auto",
+        tau=0.005,
+    )
+
+    # device="cuda", ent_coef=0.05, learning_rate=1e-4)
+
+    # Try ent_coef = 0.05 "Stable but less exploration"
+    # Try tau = 0.00005 "Slower updates but less stable"
+    # Try use_sde = True "Better exploration for continuous actions"
 
     # Create nice name for log directory
     fwd_bck = "fwd" if not config.reverse else "bck"
@@ -145,6 +163,10 @@ def load_model(config: WorkflowConfig) -> SAC:
 
 def evaluate_model(env: SLDEnv, model: SAC, output_dir: Path) -> dict:
     """Evaluate a trained RL model and save the results."""
+
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     eval_results = run_model(env, model)
 
     plot_training_results(
@@ -152,14 +174,14 @@ def evaluate_model(env: SLDEnv, model: SAC, output_dir: Path) -> dict:
         results=eval_results,
         output_path=output_dir,
     )
-    
+
     # Plot parameter evolution over time
     plot_parameter_evolution(
         env,
         results=eval_results,
         output_path=output_dir,
     )
-    
+
     # Plot reflectivity evolution over time
     plot_reflectivity_evolution(
         env,
@@ -167,7 +189,7 @@ def evaluate_model(env: SLDEnv, model: SAC, output_dir: Path) -> dict:
         results=eval_results,
         output_path=output_dir,
     )
-    
+
     return eval_results
 
 
@@ -183,25 +205,32 @@ def run_model(env: SLDEnv, model: SAC) -> dict:
     episode_actions = []
     time_points = []
     chi2 = []
+    episode_reward = 0
 
     done = False
 
     for i in range(n_times):
         action, _ = model.predict(obs, deterministic=True)
-        obs, reward, terminated, truncated, info = env.step(action)
+        new_obs, reward, terminated, truncated, info = env.step(action)
 
         episode_rewards.append(reward)
         episode_actions.append(action.copy())
         chi2.append(env.chi2)
         time_points.append(env.time_stamp)
 
+        episode_reward += reward
+        logging.info(f"Time {env.time_stamp} {obs}: {reward} {episode_reward}")
+
+        obs = new_obs
         done = terminated or truncated
         if done:
             break
 
+    errs = compute_action_uncertainties(env, model, sample_size=100)
     results = {
         "episode_rewards": episode_rewards,
         "episode_actions": episode_actions,
+        "actions_uncertainties": errs,
         "time_points": time_points,
         "chi2": chi2,
         "total_reward": sum(episode_rewards),
@@ -212,11 +241,36 @@ def run_model(env: SLDEnv, model: SAC) -> dict:
     return results
 
 
-def load_data(data_location: str) -> List:
+def compute_action_uncertainties(
+    env: SLDEnv, model: SAC, sample_size: int = 100
+) -> dict:
+    """Compute uncertainties for the model predictions."""
+    logging.info("🔍 Computing uncertainties")
+
+    samples = []
+
+    for n in range(sample_size):
+        actions = []
+        obs, info = env.reset()
+        for i in range(len(env.data)):
+            action, _ = model.predict(obs, deterministic=False)
+            obs, reward, terminated, truncated, info = env.step(action)
+            actions.append(action)
+
+        samples.append(np.asarray(actions))
+
+    samples = np.asarray(samples)
+    print(samples.shape)
+    uncertainties = np.std(samples, axis=0)
+    print(uncertainties)
+    return uncertainties
+
+
+def load_data(data_location: Path) -> List:
     """Process and load data from the specified location."""
-    if os.path.isfile(data_location):
+    if data_location.is_file():
         time_resolved_data = load_data_from_json(data_location)
-    elif os.path.isdir(data_location):
+    elif data_location.is_dir():
         time_resolved_data = load_data_from_directory(data_location)
     else:
         raise ValueError(
@@ -225,23 +279,76 @@ def load_data(data_location: str) -> List:
     return time_resolved_data
 
 
-def load_data_from_json(data_path: str) -> List:
+def load_data_from_json(data_location: Path) -> List:
     """Load time-resolved data from JSON file."""
-    with open(data_path, "r") as fd:
+    with open(data_location, "r") as fd:
         data_dict = json.load(fd)
         if "data" in data_dict:
             return data_dict["data"]
         else:
-            raise ValueError(f"JSON file {data_path} does not contain 'data' key")
+            raise ValueError(f"JSON file {data_location} does not contain 'data' key")
 
 
-def load_data_from_directory(data_dir: str) -> List:
+def load_data_from_directory(data_location: Path) -> List:
     """Load time-resolved data from directory of JSON files."""
     # Placeholder for handling directory of files
-    data_dir = Path(data_dir)
-    if not data_dir.is_dir():
-        raise ValueError(f"Directory {data_dir} does not exist")
+    if not data_location.is_dir():
+        raise ValueError(f"Directory {data_location} does not exist")
 
     # Look for time-resolved data files
-    data_files = list(data_dir.glob("r*_t*.txt"))
-    return []
+    data_files = sorted(list(data_location.glob("r*_t*.txt")))
+
+    # Extract unique run numbers from filenames
+    run_numbers = set()
+    for file in data_files:
+        name = file.stem  # e.g., "r3_t100"
+        try:
+            run_str = name.split("_t")[0]  # e.g., "r3"
+            run_num = int(run_str[1:])  # skip the 'r'
+            run_numbers.add(run_num)
+        except (IndexError, ValueError):
+            logging.error(f"Unexpected file name format: {file.name}")
+
+    # Now run_numbers contains all unique <number> values from the filenames
+    # If there's only one run number, we can package the data
+    if not len(run_numbers) == 1:
+        logging.error(
+            f"Multiple run numbers found in directory {data_location}. Unable to load data."
+        )
+        return None
+
+    run_number = run_numbers.pop()
+    packaged_json_file = data_location / f"r{run_number}-time-resolved.json"
+    times, data = package_json_data(data_files, data_location, packaged_json_file)
+    return data
+
+
+def package_json_data(data_files: list, data_location: Path, out_array: Path):
+    """Compile data files into a single time-resolved dataset.
+    Parameters
+    ----------
+    data_files : list
+        List of data files to compile
+    data_location : Path
+        Directory containing the data files
+    out_array : Path
+        Path to save the compiled JSON data
+    """
+    compiled_array = []
+    compiled_times = []
+    # data_files = data_files[::5]
+    for i, _file in enumerate(data_files):
+        _file_path = data_location / _file
+
+        _data = np.loadtxt(_file_path).T
+        _time_str = _file.stem.split("_t")[1]
+        _time = int(_time_str)
+        print(i, _file, len(_data[0]))
+
+        compiled_array.append(_data.tolist())
+        compiled_times.append(_time)
+
+    with open(out_array, "w") as fp:
+        json.dump(dict(times=compiled_times, data=compiled_array), fp)
+
+    return compiled_times, compiled_array

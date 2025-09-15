@@ -98,13 +98,10 @@ def sample_from_json(
                 slab.material.irho.range(irho_limits[0], irho_limits[1])
             slab.material.irho.fixed = not set_ranges
         if not thickness_fixed:
-            print("Setting thickness")
             if thickness_std > 0:
-                print(thickness_std)
                 slab.thickness.dev(
                     thickness_std, limits=(thickness_limits[0], thickness_limits[1])
                 )
-                print(slab.thickness.distribution.std)
             else:
                 slab.thickness.range(thickness_limits[0], thickness_limits[1])
             slab.thickness.fixed = not set_ranges

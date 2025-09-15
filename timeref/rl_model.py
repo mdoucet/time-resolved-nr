@@ -79,6 +79,8 @@ class SLDEnv(gym.Env):
 
         expt = model_utils.expt_from_json_file(self.expt_file)
         probe.intensity = Parameter(
+            # Need an option to set scale
+            # value=0.87, name=expt.probe.intensity.name
             value=expt.probe.intensity.value, name=expt.probe.intensity.name
         )
         probe.background = Parameter(
@@ -150,12 +152,21 @@ class SLDEnv(gym.Env):
                 - 1
             )
 
-    def convert_action_to_parameters(self, parameters):
+    def convert_action_to_parameters(self, parameters: np.ndarray) -> np.ndarray:
         """
         Convert parameters from action space to physics spaces
         """
         deltas = self.high_array - self.low_array
         return self.low_array + deltas * (parameters + 1.0) / 2.0
+
+    def convert_action_uncertainties_to_parameters(
+        self, uncertainties: np.ndarray
+    ) -> np.ndarray:
+        """
+        Convert uncertainty on parameters from action space to physics spaces
+        """
+        deltas = self.high_array - self.low_array
+        return deltas * uncertainties / 2.0
 
     def set_model_parameters(self, values):
         """
@@ -241,9 +252,10 @@ class SLDEnv(gym.Env):
         state = self.time_stamp / (len(self.data) - 1)
         state = np.array([state], dtype=np.float32)
 
+        # Maybe add a term to minimze the change in parameters
+
         # Add a term for the boundary conditions (first and last times)
         if self.use_steady_states:
-            _ = self.high_array - self.low_array
             if self.start_state:
                 reward -= len(self.data) * np.mean(
                     (action - self.normalized_parameters) ** 2
@@ -279,5 +291,8 @@ class SLDEnv(gym.Env):
         to maintain API compatibility while separating concerns.
         """
         from .reports.plotting import plot_sld_env_state
-        logging.warning("SLDEnv.plot is deprecated. Use the plotting function from timeref.reports.plotting instead.")
+
+        logging.warning(
+            "SLDEnv.plot is deprecated. Use the plotting function from timeref.reports.plotting instead."
+        )
         plot_sld_env_state(self, scale=scale, newfig=newfig, errors=errors, label=label)

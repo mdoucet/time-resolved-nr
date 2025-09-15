@@ -29,3 +29,9 @@ pip install -e .
 
 Examples from the paper are in the `notebooks` directory, and examples from users will be added to
 the `examples` directory.
+
+
+## TODO
+- Determine scale from first time step
+- Option to set scale
+- Way to monitor during training

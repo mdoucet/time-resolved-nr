@@ -45,7 +45,7 @@ Homepage = "https://github.com/mdoucet/time-resolved-nr"
 timeref = "timeref.cli:main"
 
 [tool.setuptools.packages.find]
-where = ["timeref"]
+where = ["."]
 
 [tool.versioningit.vcs]
 method = "git"

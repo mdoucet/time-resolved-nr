@@ -174,6 +174,8 @@ def plot_initial_state(env: SLDEnv, output_path: Path, show: bool = False) -> Pa
     plot_sld_env_state(env, errors=True, label="Initial state")
     plt.title(f"Initial State (Time point {env.time_stamp})")
 
+    output_path = Path(output_path)
+    output_path.mkdir(parents=True, exist_ok=True)
     plot_path = output_path / "initial_state.png"
     plt.savefig(plot_path, dpi=150, bbox_inches="tight")
     logging.info(f"📈 Initial state plot saved: {plot_path}")
@@ -211,17 +213,20 @@ def plot_parameter_evolution(
     """
     # Extract data from results
     episode_actions = np.array(results["episode_actions"])
+    actions_uncertainties = np.array(results.get("actions_uncertainties", np.zeros_like(episode_actions)))
     time_points = np.array(results["time_points"])
     parameter_labels = results["parameter_labels"]
 
     # Calculate parameter statistics if not provided
-    if initial_parameters is None:
-        initial_parameters = episode_actions[0]
-    if final_parameters is None:
-        final_parameters = episode_actions[-1]
+    initial_parameters = env.parameters if not env.reverse else env.end_parameters
+    final_parameters = env.end_parameters if not env.reverse else env.parameters
     
     # Transpose for easier indexing (n_params x n_times)
-    parameters = episode_actions.T
+    #deltas = env.high_array - env.low_array
+    #values = env.low_array + (1 + episode_actions[:, :len(env.parameters)]) * deltas / 2.0
+    print("plotting", episode_actions.shape)
+    parameters = env.convert_action_to_parameters(episode_actions).T
+    errs = env.convert_action_uncertainties_to_parameters(actions_uncertainties).T
 
     # Use actual parameter labels if available
     axes_labels = [f"{label}" for label in parameter_labels]
@@ -241,9 +246,10 @@ def plot_parameter_evolution(
             plt.subplot(len(parameters), 1, i + 1)
 
         # Plot RL results
-        plt.plot(
+        plt.errorbar(
             time_points,
             parameters[i],
+            yerr=errs[i],
             label="RL",
             marker=".",
             markersize=6,
@@ -295,7 +301,6 @@ def plot_reflectivity_evolution(
     results,
     output_path=None,
     figsize=(6, 15),
-    q_range=(0.015, 0.12),
     show=False,
 ):
     """
@@ -307,7 +312,6 @@ def plot_reflectivity_evolution(
         results: Dictionary from run_model() containing episode data
         output_path: Optional path to save the plot
         figsize: Figure size tuple
-        q_range: Tuple of (q_min, q_max) for x-axis limits
         show: Whether to display the plot
 
     Returns:
@@ -346,8 +350,6 @@ def plot_reflectivity_evolution(
     plt.legend(
         handles[::-1], labels[::-1], frameon=False, prop={"size": 9}, loc="upper right"
     )
-
-    plt.xlim(q_range)
 
     if output_path:
         plot_path = Path(output_path) / "reflectivity_evolution.png"
