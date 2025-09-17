@@ -274,10 +274,6 @@ def plot_parameter_evolution(
         else:
             plt.ylabel(f"Parameter {i + 1}")
 
-        # Add legend to first panel
-        if i == 0:
-            plt.legend(frameon=False)
-
         plt.grid(True, alpha=0.3)
 
     plt.xlabel("Time Steps")

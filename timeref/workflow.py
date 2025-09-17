@@ -46,6 +46,9 @@ class WorkflowConfig(BaseModel):
     allow_mixing: bool = Field(
         False, description="Allow mixing between states during training"
     )
+    find_scale: bool = Field(
+        True, description="Determine scale factor from first data point"
+    )
     verbose: bool = Field(False, description="Enable verbose logging")
 
 
@@ -61,6 +64,7 @@ def create_env(config: WorkflowConfig) -> SLDEnv:
     logging.info(f"   - Final state: {config.final_state_file}")
     logging.info(f"   - Direction: {'reverse' if config.reverse else 'forward'}")
     logging.info(f"   - Allow mixing: {config.allow_mixing}")
+    logging.info(f"   - Find scale: {config.find_scale}")
 
     # Register the custom environment
     gym.register(
@@ -74,10 +78,12 @@ def create_env(config: WorkflowConfig) -> SLDEnv:
         data=time_resolved_data,
         reverse=config.reverse,
         allow_mixing=config.allow_mixing,
+        find_scale=True,
     )
     check_env(env.unwrapped)
     env.reset()
 
+    logging.info(f"   - Scale factor: {env.unwrapped.ref_model.probe.intensity.value}")
     if hasattr(env.unwrapped, "par_labels"):
         logging.info(f"   - Trainable parameters: {len(env.unwrapped.par_labels)}")
         for i, label in enumerate(env.unwrapped.par_labels):
@@ -97,16 +103,12 @@ def learn(env: SLDEnv, config: WorkflowConfig) -> SAC:
         "MlpPolicy",
         env,
         verbose=1 if config.verbose else 0,
-        device="cuda",
+        device="auto",
         ent_coef="auto",
-        tau=0.005,
+        #use_sde=True,
+        #sde_sample_freq=10,
+        #policy_kwargs={"use_expln": True},
     )
-
-    # device="cuda", ent_coef=0.05, learning_rate=1e-4)
-
-    # Try ent_coef = 0.05 "Stable but less exploration"
-    # Try tau = 0.00005 "Slower updates but less stable"
-    # Try use_sde = True "Better exploration for continuous actions"
 
     # Create nice name for log directory
     fwd_bck = "fwd" if not config.reverse else "bck"
@@ -122,7 +124,9 @@ def learn(env: SLDEnv, config: WorkflowConfig) -> SAC:
 
     # Train the model
     model.learn(
-        total_timesteps=config.n_steps, progress_bar=True, callback=progress_callback
+        total_timesteps=config.n_steps,
+        progress_bar=True,
+        callback=progress_callback,
     )
     # Save trained model
     model_path = output_dir / f"model-{config.model_name}-{fwd_bck}"
@@ -203,6 +207,7 @@ def run_model(env: SLDEnv, model: SAC) -> dict:
     # Run a full episode with the trained model
     episode_rewards = []
     episode_actions = []
+    episode_errors = []
     time_points = []
     chi2 = []
     episode_reward = 0
@@ -211,26 +216,33 @@ def run_model(env: SLDEnv, model: SAC) -> dict:
 
     for i in range(n_times):
         action, _ = model.predict(obs, deterministic=True)
+
         new_obs, reward, terminated, truncated, info = env.step(action)
+        obs_tensor, vectorized_env = model.actor.obs_to_tensor(new_obs)
+        mean_action, log_std, _ = model.actor.get_action_dist_params(obs_tensor)
+
+        mean_action = mean_action.cpu().detach().numpy()[0]
+        std_action = log_std.exp().cpu().detach().numpy()[0]
 
         episode_rewards.append(reward)
-        episode_actions.append(action.copy())
+        episode_actions.append(mean_action)
+        episode_errors.append(std_action)
         chi2.append(env.chi2)
         time_points.append(env.time_stamp)
 
         episode_reward += reward
-        logging.info(f"Time {env.time_stamp} {obs}: {reward} {episode_reward}")
+        logging.debug(f"Time {env.time_stamp} {obs}: {reward} {episode_reward}")
 
         obs = new_obs
         done = terminated or truncated
         if done:
             break
 
-    errs = compute_action_uncertainties(env, model, sample_size=100)
+    compute_action_uncertainties(env, model, sample_size=200)
     results = {
         "episode_rewards": episode_rewards,
         "episode_actions": episode_actions,
-        "actions_uncertainties": errs,
+        "actions_uncertainties": episode_errors,
         "time_points": time_points,
         "chi2": chi2,
         "total_reward": sum(episode_rewards),
@@ -256,13 +268,15 @@ def compute_action_uncertainties(
             action, _ = model.predict(obs, deterministic=False)
             obs, reward, terminated, truncated, info = env.step(action)
             actions.append(action)
+            
 
         samples.append(np.asarray(actions))
 
-    samples = np.asarray(samples)
-    print(samples.shape)
+    # Covariance of the last actions
+    cov = np.cov(np.asarray(actions).T)
+    coeff = np.corrcoef(cov)
+    logging.info(f"Correlation coefficients:\n{coeff}")
     uncertainties = np.std(samples, axis=0)
-    print(uncertainties)
     return uncertainties
 
 
@@ -343,7 +357,6 @@ def package_json_data(data_files: list, data_location: Path, out_array: Path):
         _data = np.loadtxt(_file_path).T
         _time_str = _file.stem.split("_t")[1]
         _time = int(_time_str)
-        print(i, _file, len(_data[0]))
 
         compiled_array.append(_data.tolist())
         compiled_times.append(_time)

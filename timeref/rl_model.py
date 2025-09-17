@@ -19,6 +19,7 @@ class SLDEnv(gym.Env):
         data=None,
         reverse=True,
         allow_mixing=False,
+        find_scale=False,
         mix_first_action=False,
         use_steady_states=True,
     ):
@@ -39,6 +40,9 @@ class SLDEnv(gym.Env):
         self.allow_mixing = allow_mixing
         self.mix_first_action = mix_first_action
         self.use_steady_states = use_steady_states
+        self.find_scale = find_scale
+        self.time_stamp = len(self.data) - 1 if self.reverse else 0
+        self.start_state = True
 
         if data is None:
             self.q = np.logspace(np.log10(0.009), np.log10(0.2), num=150)
@@ -72,17 +76,43 @@ class SLDEnv(gym.Env):
             data_list.append(np.asarray(d))
         return data_list
 
+    def determine_scale(self, expt: Experiment) -> float:
+        """
+        Determine scale factor from first data point
+        """
+        # Check if time_stamp is valid for the data
+        if self.time_stamp >= len(self.data):
+            # If time_stamp is out of range, use the last available data point
+            time_idx = len(self.data) - 1
+        else:
+            time_idx = self.time_stamp
+        time_data = self.data[time_idx]
+
+        dq = self.q_resolution * self.q
+        probe = QProbe(self.q, dq)
+
+        probe.intensity = Parameter(value=1.0, name=expt.probe.intensity.name)
+        ref_model = Experiment(probe=probe, sample=expt.sample)
+        _, refl = ref_model.reflectivity()
+
+        scale = np.sum(time_data[1]) / np.sum(refl)
+        return scale
+
     def setup_model(self):
         # Create QProbe matching tNR data
         dq = self.q_resolution * self.q
         probe = QProbe(self.q, dq)
 
         expt = model_utils.expt_from_json_file(self.expt_file)
-        probe.intensity = Parameter(
-            # Need an option to set scale
-            # value=0.87, name=expt.probe.intensity.name
-            value=expt.probe.intensity.value, name=expt.probe.intensity.name
-        )
+
+        scale_value = expt.probe.intensity.value
+
+        if self.find_scale:
+            scale_value = self.determine_scale(expt)
+            logging.debug(f"Determined scale factor: {scale_value}")
+
+        # Set initial intensity and background to those in the experiment
+        probe.intensity = Parameter(value=scale_value, name=expt.probe.intensity.name)
         probe.background = Parameter(
             value=expt.probe.background.value, name=expt.probe.background.name
         )
@@ -272,8 +302,8 @@ class SLDEnv(gym.Env):
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
-        self.setup_model()
         self.time_stamp = len(self.data) - 1 if self.reverse else 0
+        self.setup_model()
         state = self.time_stamp / (len(self.data) - 1)
         state = np.array([state], dtype=np.float32)
         self.start_state = True
