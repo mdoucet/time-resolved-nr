@@ -63,3 +63,6 @@ class TestIntegration:
         results = workflow.run_model(env.unwrapped, model)
 
         plot_training_results(env.unwrapped, results=results, output_path=output_path)
+
+        eval_results = workflow.evaluate_model(env.unwrapped, model, output_path)
+        assert isinstance(eval_results, dict)
