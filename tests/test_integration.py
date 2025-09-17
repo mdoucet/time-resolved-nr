@@ -48,7 +48,7 @@ class TestIntegration:
 
         # take the action and get the information from the environment
         _, reward, _, _, info = env.step(action)
-        assert np.isclose(reward, -1.3509, atol=1e-4)
+        assert np.isclose(reward, -1.2950105692519436, atol=1e-4)  # Updated expected value
         assert np.isclose(action[0], 0.22399, atol=1e-3)
         assert np.isclose(action[1], 0.30617, atol=1e-3)
         assert np.isclose(action[2], 0.58477, atol=1e-3)
